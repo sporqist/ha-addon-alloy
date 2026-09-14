@@ -96,9 +96,49 @@ jobs:
           push: ${{ inputs.publish }}
           version: ${{ needs.prepare.outputs.version }}
 
+  # The gate that makes automerge safe: the image built from this commit runs
+  # UNDER ITS APPARMOR PROFILE in enforce mode, reads the runner's real journal
+  # and pushes to a real Loki. A dependency bump that needs a path the profile
+  # does not grant, or that breaks the journal reader, fails here. See
+  # .github/scripts/e2e.sh for what exactly is asserted.
+  test:
+    name: End-to-end under AppArmor
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      loki:
+        image: grafana/loki:3.7.7
+        ports:
+          - 3100:3100
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the amd64 image on the runner
+        run: docker buildx build --load -t addon-under-test "./${{ inputs.app }}"
+
+      - name: Wait for Loki
+        run: |
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:3100/ready && exit 0
+            sleep 3
+          done
+          echo "Loki never became ready"; exit 1
+
+      - name: Run the end-to-end test
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq apparmor-utils >/dev/null
+          bash .github/scripts/e2e.sh addon-under-test \
+            http://host.docker.internal:3100/loki/api/v1/push \
+            http://localhost:3100
+
   manifest:
     name: Publish multi-arch manifest
-    needs: [prepare, build]
+    needs: [prepare, build, test]
     if: inputs.publish
     runs-on: ubuntu-latest
     permissions:

@@ -1,8 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, and the GitHub Actions. Actions, the base image and Alloy PATCH releases automerge once CI is green; Alloy minor/major stay PRs, because the AppArmor profile is a list of what the current Alloy touches and a new minor can touch more. A merge only publishes an image - Home Assistant installs it when the operator updates the add-on.",
-  "extends": ["config:recommended"],
-  "labels": ["dependencies"],
+  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, the GitHub Actions and the Loki used in CI. EVERY bump automerges once CI is green - and CI runs the built image under the AppArmor profile in enforce mode against a real journal and a real Loki, so a release that needs a path the profile does not grant, or that breaks the journal reader, never merges. A merge publishes an image; Home Assistant installs it through the add-on's auto-update.",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "dependencyDashboard": true,
   "platformAutomerge": false,
   "automergeType": "pr",
@@ -10,8 +14,12 @@
     {
       "customType": "regex",
       "description": "ALLOY_VERSION in the Dockerfile follows grafana/alloy releases",
-      "managerFilePatterns": ["/^alloy/Dockerfile$/"],
-      "matchStrings": ["ARG ALLOY_VERSION=\"(?<currentValue>[^\"]+)\""],
+      "managerFilePatterns": [
+        "/^alloy/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG ALLOY_VERSION=\"(?<currentValue>[^\"]+)\""
+      ],
       "depNameTemplate": "grafana/alloy",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
@@ -19,8 +27,12 @@
     {
       "customType": "regex",
       "description": "The add-on version IS the Alloy version, so config.yaml moves with the same release",
-      "managerFilePatterns": ["/^alloy/config\\.yaml$/"],
-      "matchStrings": ["^version: \"(?<currentValue>[^\"]+)\""],
+      "managerFilePatterns": [
+        "/^alloy/config\\.yaml$/"
+      ],
+      "matchStrings": [
+        "^version: \"(?<currentValue>[^\"]+)\""
+      ],
       "depNameTemplate": "grafana/alloy",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
@@ -29,33 +41,47 @@
   "packageRules": [
     {
       "description": "One PR per Alloy release, touching Dockerfile and config.yaml together",
-      "matchDepNames": ["grafana/alloy"],
+      "matchDepNames": [
+        "grafana/alloy"
+      ],
       "groupName": "Grafana Alloy",
       "commitMessageTopic": "Grafana Alloy"
     },
     {
-      "description": "Alloy patch releases automerge after CI; minor and major wait for a human and a changelog read",
-      "matchDepNames": ["grafana/alloy"],
-      "matchUpdateTypes": ["patch"],
+      "description": "Alloy bumps of every size automerge after the e2e gate; a release must be 3 days old first, so one Grafana pulls or hotfixes in its first days never lands",
+      "matchDepNames": [
+        "grafana/alloy"
+      ],
+      "minimumReleaseAge": "3 days",
       "automerge": true
     },
     {
-      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line, and automerge - CI rebuilds the image on the PR",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/home-assistant/base-debian"],
+      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line; automerges after the e2e gate rebuilds on it",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/home-assistant/base-debian"
+      ],
       "versioning": "regex:^trixie-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
       "automerge": true
     },
     {
-      "description": "GitHub Actions bumps automerge after CI",
-      "matchManagers": ["github-actions"],
-      "automerge": true
+      "description": "Pin the builder actions to their release tags, not a floating branch",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "home-assistant/builder"
+      ],
+      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{2})\\.(?<patch>\\d+)$"
     },
     {
-      "description": "Pin the builder actions to their release tags, not a floating branch",
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["home-assistant/builder"],
-      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{2})\\.(?<patch>\\d+)$"
+      "description": "GitHub Actions and the CI Loki image automerge after CI",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "automerge": true
     }
   ]
 }

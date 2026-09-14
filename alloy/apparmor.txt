@@ -4,10 +4,12 @@
 # (developers.home-assistant.io/docs/apps/presentation#apparmor) plus what the
 # two s6 scripts and the Alloy binary actually touch.
 #
-# The alloy sub-profile carries the `complain` flag for its first release so
-# that ungranted access is LOGGED, not denied - the documented way to finish a
-# profile: run it, read `journalctl _TRANSPORT="audit" -g 'apparmor="ALLOWED"'`
-# on the host, add what is missing, then remove `complain`.
+# ENFORCED, and tested: CI loads this profile on the runner, runs the freshly
+# built image under it against a real journal and a real Loki, and fails the
+# build on any apparmor DENIED for it (.github/scripts/e2e.sh). A dependency
+# bump that needs a new path shows up there, not inside a household's Home
+# Assistant. On a real host, denials are `journalctl _TRANSPORT="audit"` lines;
+# with the journal shipped to Loki they are also queryable there.
 profile alloy flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
 
@@ -53,7 +55,7 @@ profile alloy flags=(attach_disconnected,mediate_deleted) {
   # Start new profile for the Alloy binary
   /usr/bin/alloy cx -> alloy_bin,
 
-  profile alloy_bin flags=(attach_disconnected,mediate_deleted,complain) {
+  profile alloy_bin flags=(attach_disconnected,mediate_deleted) {
     #include <abstractions/base>
     #include <abstractions/nameservice>
     #include <abstractions/ssl_certs>
