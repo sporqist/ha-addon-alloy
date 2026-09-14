@@ -133,7 +133,9 @@ logging {
 // No `labels = { job = ... }` here: Alloy 1.19.0-1.19.2 overwrite a job label
 // declared on the source with the component id (grafana/alloy#6980, fixed by
 // #6982 for 1.19.3). The job is stamped in loki.process below instead, which
-// every version honours.
+// every version honours. That stays after 1.19.3 too: a label set by a stage
+// is immune to the whole class of source-side label overrides, so do not
+// move job back onto the source once upstream is fixed.
 loki.source.journal "journal" {
   path           = "${JOURNAL_PATH}"
   format_as_json = ${USE_JSON}

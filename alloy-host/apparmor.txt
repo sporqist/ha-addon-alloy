@@ -132,6 +132,14 @@ profile alloy-host flags=(attach_disconnected,mediate_deleted) {
     # device (found by the gate on a runner with NVMe temperature sensors).
     /sys/devices/**/hwmon*/ r,
     /sys/devices/**/hwmon*/** r,
+    # The hwmon collector also LISTS the hwmon's parent device (hwmonN/device
+    # -> e.g. .../nvme/nvme0/ or /sys/devices/platform/coretemp.0/) and reads
+    # legacy-layout sensor files there (node_exporter hwmon_linux.go,
+    # collectSensorData(dir/device)). That parent can be any device, so:
+    # directory listings anywhere under /sys/devices (trailing slash =
+    # directories only), and the sensor-file shape, nothing else.
+    /sys/devices/**/ r,
+    /sys/devices/**/{temp,in,fan,pwm,curr,power,energy,humidity,intrusion}[0-9]*_* r,
     /sys/devices/virtual/thermal/** r,
     /sys/devices/system/cpu/** r,
   }

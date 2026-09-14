@@ -11,7 +11,8 @@ release notes: https://github.com/grafana/alloy/releases
   `loki.source.journal` with the component id (grafana/alloy#6980; fixed
   upstream for 1.19.3), which is what made the 1.19.2 update fail the gate:
   every line arrived as `job="loki.source.journal.journal"`. No change on
-  1.13.2; the fix is what lets 1.19.x updates through.
+  1.13.2; the fix is what lets 1.19.x updates through, and it is permanent:
+  a label set by a stage is immune to source-side overrides in any version.
 
 ## 1.13.2.6 - 2026-09-14
 
