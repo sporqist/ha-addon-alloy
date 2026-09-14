@@ -18,7 +18,7 @@ Grafana Alloy is the official successor to Promtail, Grafana Agent, and Grafana 
 
 ## Configuration
 
-Set `loki_url` to your Loki push endpoint:
+Set `loki_url` to your Grafana Loki push endpoint:
 
 ```yaml
 loki_url: "http://192.168.1.45:3100/loki/api/v1/push"
@@ -37,7 +37,7 @@ Labels applied: `unit`, `hostname`, `syslog_identifier`, `transport`, `container
 
 ## Debug UI
 
-Alloy's unauthenticated debug UI is not published on the host by default. Map `12345/tcp` in the add-on's Network settings only while debugging.
+Grafana Alloy's unauthenticated debug UI is not published on the host by default. Map `12345/tcp` in the add-on's Network settings only while debugging.
 
 ## What this fork changes
 
@@ -45,10 +45,14 @@ Forked from [ecohash-co/ha-addon-alloy](https://github.com/ecohash-co/ha-addon-a
 
 - **AppArmor enabled** with a custom profile (upstream shipped `apparmor: false`).
 - **Pre-built images** on GHCR from the `home-assistant/builder` actions; the HA host pulls and never builds.
-- **Checksum-verified Alloy download** against Grafana's published `SHA256SUMS`.
-- **Renovate** tracks Alloy releases, the base image and the actions; the add-on version is the Alloy version.
+- **Checksum-verified Grafana Alloy download** against Grafana's published `SHA256SUMS`.
+- **Renovate** tracks Grafana Alloy releases, the base image and the actions; the add-on version is the Grafana Alloy version.
 - `libsystemd0` installed explicitly, `build.yaml` removed, debug port unmapped by default, unused `addon_config` mapping dropped.
 
 ## License
 
 MIT
+
+---
+
+The Grafana Labs Marks are trademarks of Grafana Labs. We are not affiliated with, endorsed or sponsored by Grafana Labs or its affiliates.

@@ -16,9 +16,13 @@ OPTIONS_FILE="/data/options.json"
 mkdir -p "${CONFIG_DIR}" /data/alloy
 
 opt() { jq -r "$1" "${OPTIONS_FILE}"; }
+# optd <key> <default>: an option that is absent OR an empty string means the
+# default. Every optional key is listed in config.yaml's options with "" so the
+# form shows it; jq's // would treat that "" as a value.
+optd() { jq -r --arg d "$2" ".$1 | if . == null or . == \"\" then \$d else . end" "${OPTIONS_FILE}"; }
 LOKI_URL=$(opt '.loki_url')
-LOG_LEVEL=$(opt '.log_level // "info"')
-JOB=$(opt '.job // "systemd-journal"')
+LOG_LEVEL=$(optd log_level info)
+JOB=$(optd job systemd-journal)
 STREAM_LABELS=$(opt '(.stream_labels // ["hostname","unit","level"]) | join(" ")')
 STRUCTURED_METADATA=$(opt '.structured_metadata // false')
 LEVEL_FROM_MESSAGE=$(opt '.level_from_message // false')
@@ -239,7 +243,7 @@ if [ "${METRICS_ENABLED}" = "true" ] || [ "${HOST_METRICS}" = "true" ]; then
     # The instance label on every metric. Neither the container nor Alloy knows
     # the Home Assistant OS hostname, so the default is the container's; set
     # metrics_instance to name the host.
-    INSTANCE=$(opt ".metrics_instance // \"$(hostname)\"")
+    INSTANCE=$(optd metrics_instance "$(hostname)")
     METRICS_REMOTE_WRITE_URL=$(opt '.metrics_remote_write_url // ""')
     RW_USER=$(opt '.metrics_remote_write_user // ""')
     RW_PASSWORD=$(opt '.metrics_remote_write_password // ""')
@@ -247,6 +251,9 @@ if [ "${METRICS_ENABLED}" = "true" ] || [ "${HOST_METRICS}" = "true" ]; then
         echo "!! metrics are on (metrics_enabled or host_metrics) but metrics_remote_write_url is empty - nowhere to send them."
         exit 1
     fi
+    # Typed str in the schema so the form can show it empty; the check the url
+    # type would have done happens here instead.
+    case "${METRICS_REMOTE_WRITE_URL}" in http://*|https://*) ;; *) echo "!! metrics_remote_write_url must start with http:// or https://"; exit 1 ;; esac
     # Hosted Prometheus (Grafana Cloud and the like) wants basic auth on the
     # remote_write. Rendered only when a user is set.
     rw_auth=""
@@ -278,10 +285,10 @@ fi
 # Scrapes an OpenMetrics endpoint - by default Home Assistant's own
 # /api/prometheus, which needs `prometheus:` in configuration.yaml.
 if [ "${METRICS_ENABLED}" = "true" ]; then
-    METRICS_URL=$(opt '.metrics_url // "http://homeassistant:8123/api/prometheus"')
+    METRICS_URL=$(optd metrics_url http://homeassistant:8123/api/prometheus)
     METRICS_TOKEN=$(opt '.metrics_token // ""')
-    METRICS_INTERVAL=$(opt '.metrics_interval // "60s"')
-    METRICS_JOB=$(opt '.metrics_job // "homeassistant"')
+    METRICS_INTERVAL=$(optd metrics_interval 60s)
+    METRICS_JOB=$(optd metrics_job homeassistant)
     # Split the URL into what prometheus.scrape wants: scheme, host:port, path.
     scheme="${METRICS_URL%%://*}"
     rest="${METRICS_URL#*://}"
@@ -329,8 +336,8 @@ fi
 # collector sees only the mounts this add-on has, so it reports the data
 # partition, not every host disk.
 if [ "${HOST_METRICS}" = "true" ]; then
-    HOST_JOB=$(opt '.host_metrics_job // "node"')
-    HOST_INTERVAL=$(opt '.host_metrics_interval // "30s"')
+    HOST_JOB=$(optd host_metrics_job node)
+    HOST_INTERVAL=$(optd host_metrics_interval 30s)
     echo " host metrics: every ${HOST_INTERVAL} as job ${HOST_JOB}"
     cat >> "${CONFIG_FILE}" <<EOF
 
