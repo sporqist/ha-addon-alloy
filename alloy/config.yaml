@@ -5,7 +5,7 @@ name: Grafana Alloy
 # bumped for add-on-only changes, because Home Assistant offers an update only
 # when this string changes. Renovate writes the plain Alloy release here (rev
 # back to 0, implicitly) and into the Dockerfile's ALLOY_VERSION together.
-version: "1.13.2.1"
+version: "1.13.2.2"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
@@ -43,6 +43,7 @@ options:
     - level
   structured_metadata: false
   level_from_message: false
+  metrics_enabled: false
 schema:
   loki_url: url
   log_level: "list(debug|info|warn|error)"
@@ -51,5 +52,15 @@ schema:
     - "list(hostname|unit|level|syslog_identifier|container_name|transport|priority)"
   structured_metadata: bool
   level_from_message: bool
+  # Optional metrics scrape (Home Assistant's /api/prometheus by default),
+  # remote-written to a Prometheus. Nothing is read unless metrics_enabled.
+  metrics_enabled: bool
+  metrics_url: "url?"
+  metrics_token: "password?"
+  metrics_remote_write_url: "url?"
+  metrics_remote_write_user: "str?"
+  metrics_remote_write_password: "password?"
+  metrics_interval: "str?"
+  metrics_job: "str?"
   additional_config: "str?"
 stage: experimental

@@ -142,6 +142,26 @@ our_meta() {
   printf '%s' "$STREAM" | python3 -c 'import json,sys; m=json.load(sys.stdin)["meta"]; print(",".join(sorted(k for k in m if k in ("syslog_identifier","container_name","transport","priority"))))'
 }
 
+# ── Metrics side: a Prometheus with the remote-write receiver on, and a stub
+# /metrics endpoint that answers only to one exact bearer token. Both are
+# reachable from the container as host.docker.internal.
+# renovate: datasource=docker depName=prom/prometheus
+PROM_TAG="v3.9.1"
+PROM_PORT=9090
+STUB_PORT=9111
+STUB_TOKEN="e2e-token-$RUN_ID-$RANDOM"
+PY=python3; command -v python3 >/dev/null || PY=python
+docker rm -f e2e-prom >/dev/null 2>&1 || true
+docker run -d --name e2e-prom -p "$PROM_PORT:9090" "prom/prometheus:$PROM_TAG" \
+  --config.file=/etc/prometheus/prometheus.yml --web.enable-remote-write-receiver >/dev/null
+$PY .github/scripts/metrics-stub.py "$STUB_PORT" "$STUB_TOKEN" 2>/tmp/stub.log &
+STUB_PID=$!
+cleanup() { docker rm -f "$NAME" e2e-prom >/dev/null 2>&1 || true; kill "$STUB_PID" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+for _ in $(seq 1 30); do curl -sf "http://localhost:$PROM_PORT/-/ready" >/dev/null && break; sleep 2; done
+curl -sf "http://localhost:$PROM_PORT/-/ready" >/dev/null || fail "Prometheus never became ready"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$STUB_PORT/metrics")" = "401" ] || fail "the metrics stub is not answering (expected 401 without a token)"
+
 say "1. AppArmor on the runner"
 if [ -n "$LOCAL" ]; then
   echo "skipped (E2E_LOCAL)"
@@ -188,6 +208,24 @@ if [ -z "$LOCAL" ]; then
     || fail "syslog_identifier label wrong: $STREAM"
   echo "custom label set exact; structured metadata carried"
 fi
+
+say "5. Metrics: an authenticated scrape reaches Prometheus through remote_write"
+# The stub 401s anything but the exact token, so this proves the token file
+# is written, read, and sent without a stray newline - not just configured.
+start_addon "{\"loki_url\":\"$LOKI_PUSH\",\"log_level\":\"info\",\"metrics_enabled\":true,\"metrics_url\":\"http://host.docker.internal:$STUB_PORT/metrics\",\"metrics_token\":\"$STUB_TOKEN\",\"metrics_remote_write_url\":\"http://host.docker.internal:$PROM_PORT/api/v1/write\",\"metrics_interval\":\"5s\"}"
+tlen=$(docker exec "$NAME" sh -c 'wc -c < /data/metrics.token')
+[ "$tlen" = "${#STUB_TOKEN}" ] || fail "token file is $tlen bytes, token is ${#STUB_TOKEN}: a stray byte (newline?) would break the header"
+[ "$(docker exec "$NAME" stat -c '%a' /data/metrics.token)" = "600" ] || fail "token file is not 0600"
+found=""
+for _ in $(seq 1 24); do
+  sleep 5
+  v=$(curl -sG "http://localhost:$PROM_PORT/api/v1/query" --data-urlencode 'query=e2e_stub_up{job="homeassistant"}' \
+        | python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "")' 2>/dev/null || true)
+  [ "$v" = "1" ] && { found=1; break; }
+done
+[ -n "$found" ] || { printf -- '-- stub log --\n'; cat /tmp/stub.log; fail "e2e_stub_up never arrived in Prometheus under job=homeassistant"; }
+grep -q '200 authenticated' /tmp/stub.log || fail "Prometheus has the metric but the stub never saw an authenticated scrape"
+echo "authenticated scrape -> remote_write -> Prometheus: e2e_stub_up{job=\"homeassistant\"} = 1"
 
 say "4. Zero AppArmor denials for the profile"
 if [ -n "$LOCAL" ]; then

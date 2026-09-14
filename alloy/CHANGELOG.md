@@ -3,6 +3,19 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
+## 1.13.2.2 - 2026-09-14
+
+### Added
+- Optional metrics: `metrics_enabled` scrapes one OpenMetrics endpoint
+  (default Home Assistant's `/api/prometheus`, bearer token from
+  `metrics_token`) and remote-writes it (`metrics_remote_write_url`, with
+  optional basic auth for hosted Prometheus). Off by default; when off the
+  generated config is unchanged and no credential is kept on disk.
+- The scrape timeout is derived from the interval, because Alloy refuses a
+  timeout above the interval and `alloy validate` cannot see that.
+- CI: a third gate run scrapes a stub that answers only to the exact token,
+  through remote_write into a real Prometheus.
+
 ## 1.13.2.1 - 2026-09-14
 
 Faithful, minimal defaults; every transformation opt-in. Made for anyone's
