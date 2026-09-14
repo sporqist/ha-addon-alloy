@@ -27,6 +27,10 @@ All of the base add-on's options, with the same defaults ([its documentation](ht
 
 Set `metrics_instance` to your Home Assistant's hostname - the add-on cannot see it, and without it the `instance` label is the container's id.
 
+## Expert: raw configuration mode
+
+`raw_config: true` works here exactly as in the base add-on: Additional Grafana Alloy configuration becomes the whole configuration and everything else - including host metrics - is ignored. You then write your own `prometheus.exporter.unix` block if you want them; the profile allows the same reads.
+
 ## How it relates to the base add-on
 
 This image is the base image **plus one marker file**, built `FROM` the base at a pinned tag and digest. The add-on's version is `<base version>.<host revision>`: `1.13.2.3.1` runs base `1.13.2.3` (Grafana Alloy 1.13.2). When the base publishes a new version, Renovate proposes the bump here, it passes the same test gate (the combined image under this add-on's own AppArmor profile, host metrics asserted in a real Prometheus), and merges. That is one automation cycle of lag behind the base - a known property, not a surprise.

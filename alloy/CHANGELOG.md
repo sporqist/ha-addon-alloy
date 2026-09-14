@@ -3,6 +3,16 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
+## 1.13.2.6 - 2026-09-14
+
+### Added
+- `raw_config` (off): expert mode. Additional Grafana Alloy configuration
+  becomes the whole configuration; the generated pipeline is not written and
+  every other option except the log level is ignored. For people who want
+  their own sources, label names and outputs without a knob per label here.
+  Still validated before start; the gate ships a line through a user-written
+  pipeline with its own label names.
+
 ## 1.13.2.5 - 2026-09-14
 
 ### Changed

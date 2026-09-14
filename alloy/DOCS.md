@@ -41,6 +41,12 @@ Off by default. When on, the add-on scrapes one OpenMetrics endpoint - by defaul
 
 Grafana Alloy's debug UI (component health, pipeline graph) listens on port 12345 inside the add-on but is **not published on the host by default**, because it has no authentication. To use it temporarily, set a host port for `12345/tcp` in the add-on's Network settings, and clear it again afterwards. The Supervisor's watchdog reaches `/-/ready` on the add-on network regardless of the mapping.
 
+## Expert: raw configuration mode
+
+`raw_config: true` turns the add-on into a plain Grafana Alloy runner: the generated pipeline is not written at all, and **Additional Grafana Alloy configuration becomes the whole configuration** - your own `loki.source.journal`, your own relabelling with whatever label names you prefer, your own outputs. Every other option except `log_level` is ignored, and the generated file says so at its top. The journal is still mounted at `/var/log/journal` (or `/run/log/journal`), and the AppArmor profile is unchanged, so anything the built-in pipeline can read, yours can too.
+
+This exists so that the built-in options can stay few and conventional (`hostname`, `unit`, `level` are what the ecosystem's dashboards expect) while nobody is locked out of doing it differently. The configuration is still validated before start.
+
 ## Advanced: Additional Config
 
 The `additional_config` option lets you append raw Grafana Alloy config blocks. For example, to also scrape a file:

@@ -86,6 +86,13 @@ configuration:
   host_metrics_interval:
     name: Host metrics interval
     description: Default 30s. The timeout is half the interval (at most 10s).
+  raw_config:
+    name: Raw configuration mode
+    description: >-
+      Expert mode. "Additional Grafana Alloy configuration" becomes the WHOLE
+      configuration - your own journal source, labels and outputs - and every
+      other option except the log level is ignored. Off unless you know why
+      you want it.
   additional_config:
     name: Additional Grafana Alloy configuration
     description: >-

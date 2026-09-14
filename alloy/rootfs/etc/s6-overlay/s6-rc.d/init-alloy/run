@@ -62,6 +62,54 @@ if [ "${VARIANT}" = "host" ]; then
     HOST_METRICS=$(opt '.host_metrics // true')
 fi
 
+# finish: validate the generated file and stop the container on failure.
+# Fail fast, with the parser's message, rather than let the service crash-loop
+# on a bad additional_config where nobody is watching. s6 stops the container
+# when this oneshot exits non-zero, and the add-on log says why. This is
+# PARSE-level: a config that parses but cannot build (a scrape_timeout above
+# its interval, say) passes here and fails at start - the health check is
+# the net for that layer.
+finish() {
+    echo "Alloy config generated at ${CONFIG_FILE}"
+    if ! /usr/bin/alloy validate "${CONFIG_FILE}"; then
+        echo "!! the generated Alloy config is invalid - see above. Check loki_url and additional_config."
+        exit 1
+    fi
+    echo "Alloy config validated"
+}
+
+# ── raw_config: the expert's exit ───────────────────────────────────────────
+# Nothing generated but the logging block; additional_config IS the config.
+# For people who want their own source.journal, relabel and write with their
+# own field and label names, without a knob per label in this add-on. Every
+# other option is ignored in this mode, and the file says so.
+RAW_CONFIG=$(opt '.raw_config // false')
+if [ "${RAW_CONFIG}" = "true" ]; then
+    if [ -z "${ADDITIONAL_CONFIG}" ] || [ "${ADDITIONAL_CONFIG}" = "null" ]; then
+        echo "!! raw_config is on but additional_config is empty - there is nothing to run."
+        exit 1
+    fi
+    echo "-----------------------------------------------------------"
+    echo " Grafana Alloy for Home Assistant (${VARIANT}) - RAW CONFIG"
+    echo " additional_config is the whole configuration; every other option is ignored."
+    echo " Log level: ${LOG_LEVEL}"
+    echo "-----------------------------------------------------------"
+    rm -f /data/metrics.token /data/remote_write.password
+    cat > "${CONFIG_FILE}" <<EOF
+// Grafana Alloy config - raw_config mode: the add-on generated only the
+// logging block below; everything else is additional_config, verbatim.
+// loki_url, stream_labels, metrics_* and the rest of the options are ignored.
+
+logging {
+  level = "${LOG_LEVEL}"
+}
+
+EOF
+    printf '%s\n' "${ADDITIONAL_CONFIG}" >> "${CONFIG_FILE}"
+    finish
+    exit 0
+fi
+
 echo "-----------------------------------------------------------"
 echo " Grafana Alloy for Home Assistant (${VARIANT})"
 echo " Loki URL: ${LOKI_URL}"
@@ -377,16 +425,4 @@ if [ -n "${ADDITIONAL_CONFIG}" ] && [ "${ADDITIONAL_CONFIG}" != "null" ]; then
     printf '\n// --- Additional user config ---\n%s\n' "${ADDITIONAL_CONFIG}" >> "${CONFIG_FILE}"
 fi
 
-echo "Alloy config generated at ${CONFIG_FILE}"
-
-# Fail fast, with the parser's message, rather than let the service crash-loop
-# on a bad additional_config where nobody is watching. s6 stops the container
-# when this oneshot exits non-zero, and the add-on log says why. This is
-# PARSE-level: a config that parses but cannot build (a scrape_timeout above
-# its interval, say) passes here and fails at start - the health check is
-# the net for that layer.
-if ! /usr/bin/alloy validate "${CONFIG_FILE}"; then
-    echo "!! the generated Alloy config is invalid - see above. Check loki_url and additional_config."
-    exit 1
-fi
-echo "Alloy config validated"
+finish

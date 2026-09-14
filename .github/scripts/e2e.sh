@@ -279,6 +279,46 @@ else
   echo "skipped (E2E_LOCAL: needs the host journal)"
 fi
 
+say "3c. raw_config: additional_config is the whole pipeline"
+# A user-written pipeline with its own label names (unit_name instead of
+# unit, a job of its own). Nothing of the generated pipeline may appear.
+RAW_PIPELINE='loki.source.journal "mine" {
+  path          = "/var/log/journal"
+  forward_to    = [loki.write.mine.receiver]
+  relabel_rules = loki.relabel.mine.rules
+  labels        = { job = "e2e-raw" }
+}
+loki.relabel "mine" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit_name"
+  }
+}
+loki.write "mine" {
+  endpoint {
+    url = "'"$LOKI_PUSH"'"
+  }
+}'
+raw_opts=$(python3 -c 'import json,sys; print(json.dumps({"loki_url":"http://ignored.invalid:1/loki/api/v1/push","log_level":"info","raw_config":True,"additional_config":sys.argv[1]}))' "$RAW_PIPELINE")
+if [ -z "$LOCAL" ]; then
+  start_addon "$raw_opts"
+  logs=$(docker logs "$NAME" 2>&1)
+  case "$logs" in *"RAW CONFIG"*) : ;; *) fail "raw_config did not take (no RAW CONFIG banner)" ;; esac
+  [ "$(docker exec "$NAME" grep -c 'loki.process "journal"' /etc/alloy/config.alloy)" = "0" ] || fail "the generated pipeline leaked into raw_config mode"
+  probe e2e-raw "ci-probe-raw-$RUN_ID-$RANDOM"
+  assert_labels "job,unit_name"
+  echo "raw pipeline shipped under its own job with its own label names"
+else
+  # The raw pipeline reads a journal; locally there is none. Prove the mode
+  # itself: banner, no generated pipeline, config validated.
+  start_addon "$raw_opts"
+  logs=$(docker logs "$NAME" 2>&1)
+  case "$logs" in *"RAW CONFIG"*) : ;; *) fail "raw_config did not take (no RAW CONFIG banner)" ;; esac
+  [ "$(docker exec "$NAME" grep -c 'loki.process "journal"' /etc/alloy/config.alloy)" = "0" ] || fail "the generated pipeline leaked into raw_config mode"
+  echo "raw mode: banner, no generated pipeline, validated (journal probe needs the runner)"
+fi
+
 say "5. Metrics: an authenticated scrape reaches Prometheus through remote_write"
 # The stub 401s anything but the exact token, so this proves the token file
 # is written, read, and sent without a stray newline - not just configured.
