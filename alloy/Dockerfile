@@ -16,7 +16,7 @@ FROM ghcr.io/home-assistant/base-debian:trixie-2026.08.0@sha256:01e153da2c2579f2
 
 # Renovate tracks this against grafana/alloy releases and bumps config.yaml's
 # version in the same PR: the add-on version IS the Alloy version.
-ARG ALLOY_VERSION="1.13.2"
+ARG ALLOY_VERSION="1.19.2"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
