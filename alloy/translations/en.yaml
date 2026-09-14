@@ -74,6 +74,13 @@ configuration:
   metrics_job:
     name: Metrics job label
     description: The "job" label on the scraped metrics. Default homeassistant.
+  raw_config:
+    name: Raw configuration mode
+    description: >-
+      Expert mode. "Additional Grafana Alloy configuration" becomes the WHOLE
+      configuration - your own journal source, labels and outputs - and every
+      other option except the log level is ignored. Off unless you know why
+      you want it.
   additional_config:
     name: Additional Grafana Alloy configuration
     description: >-
