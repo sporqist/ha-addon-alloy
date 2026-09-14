@@ -2,6 +2,12 @@
 
 The add-on version is `<base add-on version>.<host revision>`; the base changelog is in `../alloy/CHANGELOG.md`.
 
+## 1.13.2.3.6 - 2026-09-15
+
+### Changed
+- Named **Alloy (host metrics)**, with the base add-on's final artwork plus a
+  "host metrics" subline on the logo. See the base changelog for why.
+
 ## 1.13.2.3.5 - 2026-09-14
 
 ### Fixed

@@ -1,11 +1,11 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
-name: Grafana Alloy
+name: Alloy
 # <alloy version>.<add-on revision>. The first three components are the bundled
 # Alloy version and the published image tag must carry them; the fourth is
 # bumped for add-on-only changes, because Home Assistant offers an update only
 # when this string changes. Renovate writes the plain Alloy release here (rev
 # back to 0, implicitly) and into the Dockerfile's ALLOY_VERSION together.
-version: "1.19.2"
+version: "1.19.2.1"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
