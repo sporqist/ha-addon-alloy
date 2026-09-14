@@ -129,18 +129,11 @@ cat >> "${CONFIG_FILE}" <<'EOF'
 EOF
 fi
 
-if [ "${STRUCTURED_METADATA}" = "true" ]; then
-    # One home per field: what is already a stream label is not also metadata.
-    # Loki keeps a name in one place, and a duplicate would be the label lost.
-    sm=""
-    for f in syslog_identifier container_name transport priority; do
-        has_label "$f" || sm="${sm}      ${f} = \"\",\n"
-    done
-    if [ -n "${sm}" ]; then
-        printf '\n  // Detail that is useful per line but poison as a stream label.\n  stage.structured_metadata {\n    values = {\n%b    }\n  }\n' "${sm}" >> "${CONFIG_FILE}"
-    fi
-fi
-
+# level_from_message runs BEFORE structured_metadata, deliberately: the metadata
+# stage removes a stream label of the same name when it moves that field into
+# metadata, and the level stage needs the temporary container_name label to
+# tell container streams apart. Found by the gate: with the order reversed the
+# level was never corrected on the metadata path.
 if [ "${LEVEL_FROM_MESSAGE}" = "true" ]; then
     # With the JSON path on, the line is the whole journal entry until the end
     # of the pipeline; the level must be read from the MESSAGE field, or a
@@ -182,6 +175,20 @@ EOF
     has_label level          || drop="${drop}\"level\", "
     if [ -n "${drop}" ]; then
         printf '\n  // Temporary labels level_from_message needed, not chosen in stream_labels.\n  stage.label_drop {\n    values = [%s]\n  }\n' "${drop%, }" >> "${CONFIG_FILE}"
+    fi
+fi
+
+if [ "${STRUCTURED_METADATA}" = "true" ]; then
+    # One home per field: what is already a stream label is not also metadata.
+    # stage.structured_metadata REMOVES a stream label of the same name when it
+    # moves that field into metadata, so listing a chosen label here would
+    # silently delete the label. (First seen as "syslog_identifier vanished".)
+    sm=""
+    for f in syslog_identifier container_name transport priority; do
+        has_label "$f" || sm="${sm}      ${f} = \"\",\n"
+    done
+    if [ -n "${sm}" ]; then
+        printf '\n  // Detail that is useful per line but poison as a stream label.\n  stage.structured_metadata {\n    values = {\n%b    }\n  }\n' "${sm}" >> "${CONFIG_FILE}"
     fi
 fi
 

@@ -11,6 +11,13 @@ release notes: https://github.com/grafana/alloy/releases
   the end of the pipeline, after the level stage. A level token in any other
   field (a container tag, a command line) could set the level. The level
   stage now reads the message explicitly when the entry is JSON.
+- With `structured_metadata` on, `level_from_message` never corrected a
+  level at all: the metadata stage removes a stream label of the same name
+  when it moves a field into metadata, and it ran before the level stage,
+  taking the temporary `container_name` label the level stage selects on.
+  The level stage now runs first. The same behaviour is why a field chosen
+  as a label was lost when also sent as metadata (fixed in 1.13.2.1 for the
+  wrong stated reason - it was this stage, not Loki).
 
 ### Changed
 - The JSON path (`format_as_json`, `stage.json`, the message restore) is
