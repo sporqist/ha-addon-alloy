@@ -44,8 +44,8 @@ jobs:
         run: |
           changed_apps=()
 
-          # If a workflow file changed, rebuild everything
-          if [[ "${CHANGED_FILES}" =~ \.github/workflows/(builder|build-app)\.yaml ]]; then
+          # If a workflow file or the test harness changed, rebuild everything
+          if [[ "${CHANGED_FILES}" =~ \.github/(workflows/(builder|build-app)\.yaml|scripts/) ]]; then
             changed_apps=(${APPS})
           else
             for app in ${APPS}; do
