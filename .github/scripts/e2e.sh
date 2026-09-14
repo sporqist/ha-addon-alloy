@@ -149,19 +149,30 @@ probe() {
 # CI only: needs the host journal and python3-systemd.
 probe_level() {
   local want="$1" msg="$2"; shift 2
-  local text="lvl-$RUN_ID-$RANDOM" args=()
-  for kv in "$@"; do args+=("'${kv%%=*}': '${kv#*=}'"); done
-  sudo python3 -c "from systemd import journal; journal.send('$msg $text', CONTAINER_NAME='e2e-container', PRIORITY=3, SYSLOG_IDENTIFIER='ci-probe', $(IFS=,; echo "${args[*]}"))"
-  local q="" got=""
+  local text="lvl-$RUN_ID-$RANDOM"
+  # Message and fields go through a file, never argv: sudo logs its command
+  # line to the journal, and that line would carry the probe text too.
+  { printf '%s %s\n' "$msg" "$text"; for kv in "$@"; do printf '%s\n' "$kv"; done; } > /tmp/ci-level.txt
+  sudo python3 - /tmp/ci-level.txt <<'PY'
+import sys
+from systemd import journal
+lines = open(sys.argv[1]).read().splitlines()
+fields = dict(kv.split("=", 1) for kv in lines[1:])
+journal.send(lines[0], CONTAINER_NAME="e2e-container", PRIORITY=3, SYSLOG_IDENTIFIER="ci-probe", **fields)
+PY
+  local q="" got="" hit=""
   for _ in $(seq 1 24); do
     sleep 5
     q=$(curl -sG -H 'X-Loki-Response-Encoding-Flags: categorize-labels' "$LOKI_QUERY/loki/api/v1/query_range" \
           --data-urlencode "query={job=\"$CUR_JOB\"} |= \"$text\"" \
           --data-urlencode "start=$(( $(date +%s) - 900 ))000000000" \
           --data-urlencode "end=$(( $(date +%s) + 60 ))000000000" --data-urlencode "limit=5")
-    case "$q" in *"$text"*) got=$(printf '%s' "$q" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["result"][0]["stream"].get("level",""))'); break ;; esac
+    case "$q" in *"$text"*)
+      hit=$(printf '%s' "$q" | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(json.dumps([{"labels": x["stream"], "line": x["values"][0][1][:80]} for x in r]))')
+      got=$(printf '%s' "$q" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["result"][0]["stream"].get("level",""))'); break ;;
+    esac
   done
-  [ "$got" = "$want" ] || fail "level for message '$msg' ($*) is '$got', expected '$want'"
+  [ "$got" = "$want" ] || fail "level for message '$msg' ($*) is '$got', expected '$want'; matched: $hit"
   echo "level_from_message: '$msg' ($*) -> level=$got"
 }
 CUR_JOB="systemd-journal"
