@@ -2,6 +2,14 @@
 
 The add-on version is `<base add-on version>.<host revision>`; the base changelog is in `../alloy/CHANGELOG.md`.
 
+## 1.13.2.3.2 - 2026-09-14
+
+### Fixed
+- AppArmor: NVMe drives expose their temperature sensors as `hwmonN/`
+  directly under the device, not under a `hwmon/` parent; the profile
+  covers both layouts. Found by the test gate on a runner with NVMe
+  sensors, before any host ran it.
+
 ## 1.13.2.3.1 - 2026-09-14
 
 ### Added
