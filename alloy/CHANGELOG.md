@@ -3,6 +3,17 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
+## 1.13.2.7 - 2026-09-14
+
+### Fixed
+- The `job` label is now stamped in the processing pipeline, not on the
+  journal source. Grafana Alloy 1.19.0-1.19.2 overwrite a job declared on
+  `loki.source.journal` with the component id (grafana/alloy#6980; fixed
+  upstream for 1.19.3), which is what made the 1.19.2 update fail the gate:
+  every line arrived as `job="loki.source.journal.journal"`. No change on
+  1.13.2; the fix is what lets 1.19.x updates through, and it is permanent:
+  a label set by a stage is immune to source-side overrides in any version.
+
 ## 1.13.2.6 - 2026-09-14
 
 ### Added

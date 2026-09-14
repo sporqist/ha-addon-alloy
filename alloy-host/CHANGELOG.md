@@ -2,6 +2,16 @@
 
 The add-on version is `<base add-on version>.<host revision>`; the base changelog is in `../alloy/CHANGELOG.md`.
 
+## 1.13.2.3.5 - 2026-09-14
+
+### Fixed
+- AppArmor: the hwmon collector also lists the hwmon's parent device
+  directory (`hwmonN/device`, e.g. an NVMe controller or `coretemp.0`) and
+  reads legacy-layout sensor files there. The profile now allows directory
+  listings under `/sys/devices` and that sensor-file shape; before, a host
+  whose hwmon sat under such a device logged one denial per scrape and the
+  hwmon collector failed (found by the gate on a runner with NVMe sensors).
+
 ## 1.13.2.3.4 - 2026-09-14
 
 ### Added

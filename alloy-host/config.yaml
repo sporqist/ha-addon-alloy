@@ -9,7 +9,7 @@ name: Grafana Alloy (host metrics)
 # image this is built FROM (which carries the Alloy version in its first
 # three); the fifth is bumped for host-only changes. Renovate writes the new
 # base tag here when it bumps the Dockerfile's FROM.
-version: "1.13.2.3.4"
+version: "1.13.2.3.5"
 slug: alloy-host
 description: >-
   Ship the Home Assistant OS journal to Loki and host metrics (CPU, memory,
