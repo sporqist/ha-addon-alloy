@@ -110,7 +110,7 @@ probe() {
           --data-urlencode "start=$(( $(date +%s) - 900 ))000000000" \
           --data-urlencode "end=$(( $(date +%s) + 60 ))000000000" \
           --data-urlencode "limit=5")
-    if printf '%s' "$q" | grep -q "$text"; then found=1; break; fi
+    case "$q" in *"$text"*) found=1; break ;; esac
   done
   [ -n "$found" ] || { printf '%s\n' "$q" | head -c 600; fail "probe line never reached Loki under job=$job"; }
   STREAM=$(printf '%s' "$q" | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"][0]; v=r["values"][0]; extra=v[2] if len(v)>2 else {}; print(json.dumps({"labels": r["stream"], "meta": extra.get("structuredMetadata", {}) if isinstance(extra, dict) else {}}))')
@@ -141,7 +141,7 @@ else
   grep -q '^profile ci_alloy ' /tmp/ci_alloy.profile || fail "profile rename did not take"
   grep -q 'complain' /tmp/ci_alloy.profile && fail "complain flag still present after strip"
   sudo apparmor_parser -r -W /tmp/ci_alloy.profile || fail "profile does not parse"
-  sudo aa-status | grep -q 'ci_alloy' || fail "profile not loaded"
+  [ "$(sudo aa-status | grep -c 'ci_alloy')" -gt 0 ] || fail "profile not loaded"
   echo "profile loaded in enforce mode"
   echo "runner journald writes to: $(sudo journalctl --header 2>/dev/null | sed -n 's/^File path: //p' | head -1)"
 fi
