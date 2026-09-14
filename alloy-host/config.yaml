@@ -1,0 +1,67 @@
+# https://developers.home-assistant.io/docs/apps/configuration#app-configuration
+#
+# THE HOST VARIANT. Everything the base "Grafana Alloy" add-on does, plus host
+# metrics (CPU, memory, load, disk, pressure, temperatures) from
+# prometheus.exporter.unix. Install this INSTEAD of the base, never alongside -
+# both would read the journal.
+name: Grafana Alloy (host metrics)
+# <base image tag>.<host revision>. The first four components are the base
+# image this is built FROM (which carries the Alloy version in its first
+# three); the fifth is bumped for host-only changes. Renovate writes the new
+# base tag here when it bumps the Dockerfile's FROM.
+version: "1.13.2.3.1"
+slug: alloy-host
+description: >-
+  Ship the Home Assistant OS journal to Loki and host metrics (CPU, memory,
+  load, disk, pressure, temperatures) to Prometheus with Grafana Alloy.
+  A superset of the Grafana Alloy add-on - install one or the other.
+url: https://github.com/sporqist/ha-addon-alloy
+arch:
+  - aarch64
+  - amd64
+image: ghcr.io/sporqist/ha-addon-alloy-host
+init: false
+startup: services
+journald: true
+# No host_network: it would put the container on the host's network namespace
+# (able to see all host traffic) for the sake of NIC counters, and NIC counters
+# are the least important host metric. So there is no netdev collector here.
+ports:
+  12345/tcp: null
+ports_description:
+  12345/tcp: "Alloy debug UI (unauthenticated - leave unmapped unless debugging)"
+options:
+  loki_url: "http://localhost:3100/loki/api/v1/push"
+  log_level: info
+  job: systemd-journal
+  stream_labels:
+    - hostname
+    - unit
+    - level
+  structured_metadata: false
+  level_from_message: false
+  metrics_enabled: false
+  host_metrics: true
+schema:
+  loki_url: url
+  log_level: "list(debug|info|warn|error)"
+  job: str
+  stream_labels:
+    - "list(hostname|unit|level|syslog_identifier|container_name|transport|priority)"
+  structured_metadata: bool
+  level_from_message: bool
+  metrics_enabled: bool
+  metrics_url: "url?"
+  metrics_token: "password?"
+  # Required whenever metrics_enabled or host_metrics is on.
+  metrics_remote_write_url: "url?"
+  metrics_remote_write_user: "str?"
+  metrics_remote_write_password: "password?"
+  metrics_instance: "str?"
+  metrics_interval: "str?"
+  metrics_job: "str?"
+  host_metrics: bool
+  host_metrics_job: "str?"
+  host_metrics_interval: "str?"
+  additional_config: "str?"
+stage: experimental

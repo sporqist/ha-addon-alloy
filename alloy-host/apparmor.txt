@@ -1,0 +1,134 @@
+#include <tunables/global>
+
+# Profile for the Grafana Alloy (host metrics) add-on: the base add-on's
+# profile plus what prometheus.exporter.unix reads. Kept in step with
+# ../alloy/apparmor.txt by hand; the e2e under both catches drift that matters.
+#
+# ENFORCED, and tested: CI loads this profile on the runner, runs the freshly
+# built image under it against a real journal and a real Loki, and fails the
+# build on any apparmor DENIED for it (.github/scripts/e2e.sh). A dependency
+# bump that needs a new path shows up there, not inside a household's Home
+# Assistant. On a real host, denials are `journalctl _TRANSPORT="audit"` lines;
+# with the journal shipped to Loki they are also queryable there.
+profile alloy-host flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Capabilities
+  file,
+  signal (send) set=(kill,term,int,hup,cont),
+
+  # S6-Overlay (v3 layout: s6-rc.d under /etc/s6-overlay)
+  /init ix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/s6-overlay/** rix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/{,**} rwk,
+  /dev/tty rw,
+
+  # Bashio
+  /usr/lib/bashio/** ix,
+  /tmp/** rwk,
+
+  # The HEALTHCHECK runs curl under this profile against the local Alloy port
+  network inet stream,
+  network inet6 stream,
+
+  # Access to options.json and the Alloy storage path
+  /data/** rw,
+
+  # init-alloy writes the generated config here
+  /etc/alloy/ rw,
+  /etc/alloy/** rw,
+
+  # init-alloy checks which journal path exists before rendering the config
+  /var/log/journal/ r,
+  /var/log/journal/** r,
+  /run/log/journal/ r,
+  /run/log/journal/** r,
+
+  # Start new profile for the Alloy binary
+  /usr/bin/alloy cx -> alloy_bin,
+
+  profile alloy_bin flags=(attach_disconnected,mediate_deleted) {
+    #include <abstractions/base>
+    #include <abstractions/nameservice>
+    #include <abstractions/ssl_certs>
+
+    # Receive signals from S6-Overlay
+    signal (receive) peer=*_alloy-host,
+
+    # Push to Loki, serve /-/ready to the Supervisor's watchdog
+    network inet stream,
+    network inet6 stream,
+    network inet dgram,
+    network inet6 dgram,
+
+    # The binary and the libraries it dlopens (libsystemd for the journal)
+    /usr/bin/alloy mr,
+    /usr/lib/** mr,
+    /lib/** mr,
+
+    # Generated config, read only
+    /etc/alloy/config.alloy r,
+
+    # Storage path (WAL, positions)
+    /data/** rwk,
+
+    # The host journal, mapped read-only by journald: true
+    /var/log/journal/ r,
+    /var/log/journal/** r,
+    /run/log/journal/ r,
+    /run/log/journal/** r,
+
+    # Alloy >= 1.19 (first seen by the CI gate on 1.19.2, denied under 1.13.2's
+    # profile): the bundled Snowflake driver extracts its native library to /tmp
+    # at startup and mmaps it. It is Alloy's own embedded code, so mapping it is
+    # consistent with running the binary at all. Restricted to that path shape.
+    owner /tmp/gosnowflake-cgo*/ rw,
+    owner /tmp/gosnowflake-cgo*/** rwm,
+    # 1.19's usage reporter identifies the host by DMI product UUID. Reporting is
+    # off (--disable-reporting); the read is denied QUIETLY rather than logged,
+    # so a profile audit stays about things that matter.
+    deny /sys/devices/virtual/dmi/id/product_uuid r,
+
+    # What the Go runtime and the journal reader look at
+    /etc/machine-id r,
+    /proc/sys/net/core/somaxconn r,
+    /proc/sys/kernel/hostname r,
+    /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+    /sys/fs/cgroup/** r,
+    owner /proc/*/** r,
+    /dev/null rw,
+    /tmp/** rwk,
+
+    # prometheus.exporter.unix, the host variant's reason to exist. /proc is
+    # this container's own view plus the kernel-global files (host_pid does not
+    # work with s6, so no other host's processes are visible). /sys reads are
+    # scoped to what the enabled collectors touch, not all of /sys.
+    /proc/stat r,
+    /proc/meminfo r,
+    /proc/loadavg r,
+    /proc/diskstats r,
+    /proc/uptime r,
+    /proc/vmstat r,
+    /proc/pressure/ r,
+    /proc/pressure/* r,
+    /proc/mounts r,
+    /proc/1/mounts r,
+    /sys/class/hwmon/ r,
+    /sys/class/hwmon/** r,
+    /sys/class/thermal/ r,
+    /sys/class/thermal/** r,
+    # The class links above resolve into /sys/devices; AppArmor mediates the
+    # resolved path, so grant those shapes and nothing else under /sys/devices.
+    /sys/devices/**/hwmon/** r,
+    /sys/devices/virtual/thermal/** r,
+    /sys/devices/system/cpu/** r,
+  }
+}
