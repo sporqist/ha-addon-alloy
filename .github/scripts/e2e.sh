@@ -49,9 +49,12 @@ fail() {
 
 # start_addon <options-json>: (re)start the container with these options and
 # wait for its HEALTHCHECK.
-DATA="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/addon-data"
+DATA=""
 start_addon() {
-  rm -rf "$DATA"; mkdir -p "$DATA"; chmod 777 "$DATA"
+  # A fresh directory per run: the container writes into it as root, and the
+  # runner user cannot remove that afterwards.
+  DATA="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/addon-data-$RANDOM$RANDOM"
+  mkdir -p "$DATA"; chmod 777 "$DATA"
   printf '%s' "$1" > "$DATA/options.json"
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   local journal_mounts=() security=()
