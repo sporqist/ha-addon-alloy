@@ -110,18 +110,15 @@ loki.process "journal" {
 EOF
 
 if [ "${STRUCTURED_METADATA}" = "true" ]; then
-cat >> "${CONFIG_FILE}" <<'EOF'
-
-  // Detail that is useful per line but poison as a stream label.
-  stage.structured_metadata {
-    values = {
-      syslog_identifier = "",
-      container_name    = "",
-      transport         = "",
-      priority          = "",
-    }
-  }
-EOF
+    # One home per field: what is already a stream label is not also metadata.
+    # Loki keeps a name in one place, and a duplicate would be the label lost.
+    sm=""
+    for f in syslog_identifier container_name transport priority; do
+        has_label "$f" || sm="${sm}      ${f} = \"\",\n"
+    done
+    if [ -n "${sm}" ]; then
+        printf '\n  // Detail that is useful per line but poison as a stream label.\n  stage.structured_metadata {\n    values = {\n%b    }\n  }\n' "${sm}" >> "${CONFIG_FILE}"
+    fi
 fi
 
 if [ "${LEVEL_FROM_MESSAGE}" = "true" ]; then

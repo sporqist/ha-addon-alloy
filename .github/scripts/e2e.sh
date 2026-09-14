@@ -105,7 +105,11 @@ probe() {
     # Inside a transient unit, so the line carries _SYSTEMD_UNIT like a real
     # service's does; a bare `logger` from the runner's session has none, and
     # the exact-label assertion below would then rightly find `unit` missing.
-    sudo systemd-run --quiet --wait --unit "ci-probe-$RANDOM" logger -t ci-probe "$text"
+    # The text is read from a file, not passed as an argument: systemd logs
+    # "Started <unit> - <command line>" and that line would match the probe
+    # query before the probe itself does.
+    printf '%s' "$text" > /tmp/ci-probe.txt
+    sudo systemd-run --quiet --wait --unit "ci-probe-$RANDOM" sh -c 'logger -t ci-probe "$(cat /tmp/ci-probe.txt)"'
   fi
   for _ in $(seq 1 24); do
     sleep 5
