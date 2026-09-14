@@ -78,10 +78,13 @@ start_addon() {
     sleep 3
   done
   [ "$st" = "healthy" ] || fail "not healthy after 90s (state: $st)"
-  echo "healthy; container chose $(docker logs "$NAME" 2>&1 | sed -n 's/^ Journal path: //p' | head -1)"
-  docker logs "$NAME" 2>&1 | grep -q 'Alloy config validated' || fail "the init script did not report a validated config"
+  # One capture, then string tests: `docker logs | grep -q` under pipefail fails
+  # spuriously when grep exits early and docker logs takes the SIGPIPE.
+  local logs; logs=$(docker logs "$NAME" 2>&1)
+  echo "healthy; container chose $(printf '%s\n' "$logs" | sed -n 's/^ Journal path: //p' | head -1)"
+  case "$logs" in *"Alloy config validated"*) : ;; *) fail "the init script did not report a validated config" ;; esac
   if [ -z "$LOCAL" ]; then
-    docker logs "$NAME" 2>&1 | grep -q 'error creating journal target' && fail "journal source could not open the journal"
+    case "$logs" in *"error creating journal target"*) fail "journal source could not open the journal" ;; esac
   fi
 }
 
