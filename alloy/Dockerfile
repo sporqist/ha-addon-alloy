@@ -53,6 +53,12 @@ RUN set -eux; \
 
 COPY rootfs /
 
+# The Supervisor reads container health from this; the `watchdog` key in
+# config.yaml is obsolete. /-/ready is served on the container's own address,
+# so it works with the debug port unmapped on the host.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fsS -o /dev/null http://127.0.0.1:12345/-/ready || exit 1
+
 LABEL \
     org.opencontainers.image.title="Grafana Alloy for Home Assistant" \
     org.opencontainers.image.description="Ship the Home Assistant OS journal to Loki with Grafana Alloy" \
