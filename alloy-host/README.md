@@ -6,3 +6,7 @@
 The Grafana Alloy add-on plus host metrics (CPU, memory, load, disk, pressure, temperatures) for Prometheus. Install this or the base add-on, not both.
 
 For full documentation, see the **Documentation** tab after installing.
+
+---
+
+The Grafana Labs Marks are trademarks of Grafana Labs. We are not affiliated with, endorsed or sponsored by Grafana Labs or its affiliates.

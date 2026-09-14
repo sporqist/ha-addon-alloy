@@ -1,0 +1,82 @@
+configuration:
+  loki_url:
+    name: Grafana Loki push URL
+    description: >-
+      Where the journal goes, e.g. http://192.168.1.45:3100/loki/api/v1/push.
+  log_level:
+    name: Grafana Alloy log level
+    description: >-
+      How much Grafana Alloy itself logs (debug, info, warn, error). Not the
+      level of the shipped lines.
+  job:
+    name: Job label
+    description: >-
+      The "job" label on every stream. Default systemd-journal. Give each
+      instance its own value if several ship to the same Grafana Loki.
+  stream_labels:
+    name: Stream labels
+    description: >-
+      Which journal fields become stream labels. Default: hostname, unit,
+      level. EVERY added label multiplies the number of streams in your Grafana Loki;
+      syslog_identifier and container_name are high-cardinality. Prefer
+      "Structured metadata" for those if your Grafana Loki supports it.
+  structured_metadata:
+    name: Structured metadata
+    description: >-
+      Carry syslog_identifier, container_name, transport and priority as
+      structured metadata on each line instead of as labels. Needs Grafana Loki 2.9+
+      with structured metadata enabled (schema v13); a Grafana Loki without it rejects
+      the whole push, which is why this is off by default.
+  level_from_message:
+    name: Level from message (containers)
+    description: >-
+      Docker logs a container's stderr at priority "err", so an add-on's own
+      WARN or INFO lines arrive as level=error. When on, container lines at
+      that priority get their level from the message text (level=... or a
+      bare WARN/INFO/... token). Off keeps the journal's own priority.
+  metrics_enabled:
+    name: Scrape metrics
+    description: >-
+      Also scrape one metrics endpoint - by default Home Assistant's own
+      /api/prometheus - and send it to a Prometheus. Needs a remote write URL.
+  metrics_url:
+    name: Metrics URL
+    description: >-
+      What to scrape. Default http://homeassistant:8123/api/prometheus, which
+      only answers if "prometheus:" is in your configuration.yaml.
+  metrics_token:
+    name: Metrics bearer token
+    description: >-
+      Token for the scrape. For Home Assistant: a long-lived access token of a
+      dedicated read-only user (see the documentation). Kept in a protected
+      file, never in the generated config.
+  metrics_remote_write_url:
+    name: Prometheus remote write URL
+    description: >-
+      Where the metrics go, e.g. http://192.168.1.45:9090/api/v1/write. A
+      self-hosted Prometheus needs --web.enable-remote-write-receiver.
+  metrics_remote_write_user:
+    name: Remote write username
+    description: Basic-auth user for the remote write (hosted Prometheus services).
+  metrics_remote_write_password:
+    name: Remote write password
+    description: Basic-auth password or API key for the remote write.
+  metrics_instance:
+    name: Instance label
+    description: >-
+      The "instance" label on the metrics. The add-on cannot see your Home
+      Assistant hostname, so set it here; otherwise the container's id is used.
+  metrics_interval:
+    name: Scrape interval
+    description: >-
+      Default 60s. The timeout is half the interval (at most 10s); large
+      instances need 15s or more.
+  metrics_job:
+    name: Metrics job label
+    description: The "job" label on the scraped metrics. Default homeassistant.
+  additional_config:
+    name: Additional Grafana Alloy configuration
+    description: >-
+      Raw Grafana Alloy configuration appended to the generated file, for
+      extra sources or pipelines. Validated before Grafana Alloy starts; a syntax
+      error stops the add-on with the parser's message in its log.

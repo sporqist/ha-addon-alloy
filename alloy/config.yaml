@@ -5,7 +5,7 @@ name: Grafana Alloy
 # bumped for add-on-only changes, because Home Assistant offers an update only
 # when this string changes. Renovate writes the plain Alloy release here (rev
 # back to 0, implicitly) and into the Dockerfile's ALLOY_VERSION together.
-version: "1.13.2.4"
+version: "1.13.2.5"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
@@ -43,7 +43,23 @@ options:
     - level
   structured_metadata: false
   level_from_message: false
+  # Every optional key is listed here with an empty value ON PURPOSE: the
+  # configuration form shows an optional field only if the key is present in
+  # options (frontend: supervisor-app-config.ts, `entry.name in options ||
+  # entry.required`); otherwise it hides behind "Show unused optional
+  # configuration options". An empty string is valid for str/password
+  # types. It is NOT valid for the url type (vol.Url rejects ""), which is why
+  # the two metrics URLs are typed str below and checked by the generator.
   metrics_enabled: false
+  metrics_url: ""
+  metrics_token: ""
+  metrics_remote_write_url: ""
+  metrics_remote_write_user: ""
+  metrics_remote_write_password: ""
+  metrics_instance: ""
+  metrics_interval: ""
+  metrics_job: ""
+  additional_config: ""
 schema:
   loki_url: url
   log_level: "list(debug|info|warn|error)"
@@ -55,9 +71,9 @@ schema:
   # Optional metrics scrape (Home Assistant's /api/prometheus by default),
   # remote-written to a Prometheus. Nothing is read unless metrics_enabled.
   metrics_enabled: bool
-  metrics_url: "url?"
+  metrics_url: "str?"
   metrics_token: "password?"
-  metrics_remote_write_url: "url?"
+  metrics_remote_write_url: "str?"
   metrics_remote_write_user: "str?"
   metrics_remote_write_password: "password?"
   metrics_instance: "str?"

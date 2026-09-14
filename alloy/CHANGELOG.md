@@ -3,6 +3,19 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
+## 1.13.2.5 - 2026-09-14
+
+### Changed
+- Every optional option now appears in the configuration form: the form
+  hides optional keys that are absent from the add-on's options, so they are
+  all listed with an empty value. An empty value means "use the default".
+  The two metrics URLs are typed as plain strings for that reason (an empty
+  string is not a valid url) and checked by the add-on at start instead.
+- Friendly names and descriptions for every option (translations), with the
+  stream-label cardinality warning where it is needed.
+- Documentation names the products as "Grafana Alloy" and "Grafana Loki"
+  and carries the trademark disclaimer; a generic icon and logo.
+
 ## 1.13.2.4 - 2026-09-14
 
 ### Fixed

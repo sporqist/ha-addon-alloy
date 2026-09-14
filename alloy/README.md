@@ -10,3 +10,7 @@ Replaces the abandoned Promtail add-on, which fails on HAOS 11+ due to the syste
 Fork of ecohash-co/ha-addon-alloy: AppArmor on, images pre-built by CI and verified against Grafana's checksums, dependencies tracked by Renovate.
 
 For full documentation, see the **Documentation** tab after installing.
+
+---
+
+The Grafana Labs Marks are trademarks of Grafana Labs. We are not affiliated with, endorsed or sponsored by Grafana Labs or its affiliates.
