@@ -27,7 +27,7 @@
     },
     {
       "customType": "regex",
-      "description": "The add-on version IS the Alloy version, so config.yaml moves with the same release. No ^ anchor: without a multiline flag it only matched at file start, and the file starts with a comment - Renovate's first PR bumped the Dockerfile alone.",
+      "description": "The add-on version IS the Alloy version, so config.yaml moves with the same release. No ^ anchor: without a multiline flag it only matched at file start, and the file starts with a comment - Renovate's first PR bumped the Dockerfile alone. Versioning loose: the file holds <alloy>.<addon-rev>, four components, which semver cannot compare.",
       "managerFilePatterns": [
         "/^alloy/config\\.yaml$/"
       ],
@@ -36,7 +36,8 @@
       ],
       "depNameTemplate": "grafana/alloy",
       "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "versioningTemplate": "loose"
     }
   ],
   "packageRules": [
@@ -49,12 +50,16 @@
       "commitMessageTopic": "Grafana Alloy"
     },
     {
-      "description": "Alloy bumps of every size automerge after the e2e gate; a release must be 3 days old first, so one Grafana pulls or hotfixes in its first days never lands",
+      "description": "Alloy patch and minor releases automerge after the e2e gate, 3 days after release. MAJORS stay manual: strangers' Home Assistants are downstream, and a major can change semantics their own additional_config depends on that the gate never exercises.",
       "matchDepNames": [
         "grafana/alloy"
       ],
       "minimumReleaseAge": "3 days",
-      "automerge": true
+      "automerge": true,
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ]
     },
     {
       "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line; automerges after the e2e gate rebuilds on it",

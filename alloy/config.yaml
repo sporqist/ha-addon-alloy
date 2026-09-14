@@ -1,8 +1,11 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Grafana Alloy
-# The add-on version IS the bundled Alloy version. Renovate bumps this and the
-# Dockerfile's ALLOY_VERSION together; the published image tag must match.
-version: "1.13.2"
+# <alloy version>.<add-on revision>. The first three components are the bundled
+# Alloy version and the published image tag must carry them; the fourth is
+# bumped for add-on-only changes, because Home Assistant offers an update only
+# when this string changes. Renovate writes the plain Alloy release here (rev
+# back to 0, implicitly) and into the Dockerfile's ALLOY_VERSION together.
+version: "1.13.2.1"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
@@ -28,11 +31,25 @@ ports_description:
   12345/tcp: "Alloy debug UI (unauthenticated - leave unmapped unless debugging)"
 # AppArmor is on by default; the custom profile is apparmor.txt next to this
 # file. Upstream shipped `apparmor: false`, which is the point of this fork.
+# Defaults are faithful and minimal: the journal as journald recorded it.
+# Everything that transforms it is opt-in. See DOCS.md for each option.
 options:
   loki_url: "http://localhost:3100/loki/api/v1/push"
   log_level: info
+  job: systemd-journal
+  stream_labels:
+    - hostname
+    - unit
+    - level
+  structured_metadata: false
+  level_from_message: false
 schema:
   loki_url: url
   log_level: "list(debug|info|warn|error)"
+  job: str
+  stream_labels:
+    - "list(hostname|unit|level|syslog_identifier|container_name|transport|priority)"
+  structured_metadata: bool
+  level_from_message: bool
   additional_config: "str?"
 stage: experimental

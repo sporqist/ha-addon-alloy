@@ -6,28 +6,19 @@ This add-on replaces the deprecated Promtail add-on, which is incompatible with 
 
 ## Configuration
 
-### Required
+The defaults ship the journal **as journald recorded it**: job `systemd-journal`, stream labels `hostname`, `unit`, `level`, and `level` meaning the journal priority. Everything that transforms it is an option that defaults off.
 
-- **loki_url**: The full URL to your Loki push endpoint (e.g., `http://192.168.1.45:3100/loki/api/v1/push`)
+| Option | Default | What it does |
+|---|---|---|
+| `loki_url` | *(required)* | Loki push endpoint, e.g. `http://192.168.1.45:3100/loki/api/v1/push` |
+| `log_level` | `info` | Alloy's own verbosity (`debug`, `info`, `warn`, `error`) |
+| `job` | `systemd-journal` | The `job` label on every stream. Set it if this instance should be told apart from other journals in the same Loki |
+| `stream_labels` | `hostname`, `unit`, `level` | Which journal fields become **stream labels**. Also available: `syslog_identifier`, `container_name`, `transport`, `priority`. Every added label multiplies streams in your Loki - add deliberately |
+| `structured_metadata` | `false` | Carry `syslog_identifier`, `container_name`, `transport` and `priority` as [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) on every line - queryable, but not streams. **Needs Loki 2.9+ with structured metadata enabled (schema v13)**; a Loki without it rejects the whole push, which is why this is off by default |
+| `level_from_message` | `false` | Docker's journald driver logs a container's stderr at priority `err`, so an add-on's `WARN` or `INFO` line written to stderr arrives as `level="error"`. When on, container lines at that priority get `level` re-derived from the line (logfmt `level=...`, or a bare `WARN`/`INFO`/... token), falling back to `error`. Off = the journal's own priority, untouched |
+| `additional_config` | *(empty)* | Raw Alloy config appended to the generated file, validated before Alloy starts |
 
-### Optional
-
-- **log_level**: Alloy log verbosity (`debug`, `info`, `warn`, `error`). Default: `info`
-- **additional_config**: Extra Alloy config blocks to append (advanced users)
-
-## Labels
-
-All journal entries are shipped to Loki with these labels. Note that `hostname` is the HA OS hostname, which is `homeassistant` on every default install - if you ship more than one instance to the same Loki, distinguish them on the receiving side (for example with a `loki.source.api` receiver per instance in a central Alloy) or set distinct hostnames.
-
-| Label | Source |
-|-------|--------|
-| `job` | `systemd-journal` (static) |
-| `unit` | systemd unit name |
-| `hostname` | machine hostname |
-| `syslog_identifier` | process identifier |
-| `transport` | journal transport type |
-| `container_name` | Docker container name (for add-ons) |
-| `level` | log priority (debug, info, warning, error, etc.) |
+`hostname` is the HA OS hostname, which is `homeassistant` on every default install. If you ship more than one instance to the same Loki, set a distinct `job` per instance (or distinct hostnames).
 
 ## Debug UI
 
