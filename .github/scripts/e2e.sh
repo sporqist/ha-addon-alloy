@@ -57,7 +57,16 @@ else
   echo "profile loaded in enforce mode"
 fi
 
+say "0. The image carries the Alloy version config.yaml promises"
+want=$(sed -n 's/^version: "\(.*\)"$/\1/p' alloy/config.yaml)
+have=$(docker run --rm --entrypoint /usr/bin/alloy "$IMAGE" --version | sed -n 's/^alloy, version v\([^ ]*\).*/\1/p')
+echo "config.yaml version=$want  image alloy=$have"
+[ -n "$want" ] && [ "$want" = "$have" ] || fail "version mismatch: the published tag would lie about what is inside"
+
 say "2. Start the add-on under the profile"
+if [ -z "$LOCAL" ]; then
+  echo "runner journald writes to: $(sudo journalctl --header 2>/dev/null | sed -n 's/^File path: //p' | head -1)"
+fi
 # Runner-owned and world-writable: the container runs as root and the runner's
 # docker may remap it; ownership must not be the thing under test.
 DATA="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/addon-data"
@@ -90,7 +99,7 @@ for _ in $(seq 1 30); do
   sleep 3
 done
 [ "$st" = "healthy" ] || fail "not healthy after 90s (state: $st)"
-echo "healthy"
+echo "healthy; container chose $(docker logs "$NAME" 2>&1 | sed -n 's/^ Journal path: //p' | head -1)"
 if [ -z "$LOCAL" ]; then
   docker logs "$NAME" 2>&1 | grep -q 'error creating journal target' && fail "journal source could not open the journal"
 fi
