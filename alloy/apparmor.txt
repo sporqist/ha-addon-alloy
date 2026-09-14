@@ -86,6 +86,17 @@ profile alloy flags=(attach_disconnected,mediate_deleted) {
     /run/log/journal/ r,
     /run/log/journal/** r,
 
+    # Alloy >= 1.19 (first seen by the CI gate on 1.19.2, denied under 1.13.2's
+    # profile): the bundled Snowflake driver extracts its native library to /tmp
+    # at startup and mmaps it. It is Alloy's own embedded code, so mapping it is
+    # consistent with running the binary at all. Restricted to that path shape.
+    owner /tmp/gosnowflake-cgo*/ rw,
+    owner /tmp/gosnowflake-cgo*/** rwm,
+    # 1.19's usage reporter identifies the host by DMI product UUID. Reporting is
+    # off (--disable-reporting); the read is denied QUIETLY rather than logged,
+    # so a profile audit stays about things that matter.
+    deny /sys/devices/virtual/dmi/id/product_uuid r,
+
     # What the Go runtime and the journal reader look at
     /etc/machine-id r,
     /proc/sys/net/core/somaxconn r,
