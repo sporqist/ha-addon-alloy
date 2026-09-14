@@ -82,3 +82,26 @@ jobs:
       app: ${{ matrix.app }}
       publish: ${{ github.event_name == 'push' }}
     secrets: inherit
+
+  # THE ONE CHECK BRANCH PROTECTION REQUIRES. It always reports, even when the
+  # build was skipped because no add-on file changed: a required check that is
+  # missing blocks the PR forever, and a required check that only sometimes
+  # runs is the same thing. Fails on any failed or cancelled build, passes on
+  # success or skip.
+  ci-ok:
+    name: CI OK
+    needs: [init, build-app]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide
+        env:
+          INIT: ${{ needs.init.result }}
+          BUILD: ${{ needs.build-app.result }}
+        run: |
+          echo "init=${INIT} build=${BUILD}"
+          [[ "${INIT}" == "success" ]] || { echo "init failed"; exit 1; }
+          case "${BUILD}" in
+            success|skipped) exit 0 ;;
+            *) echo "build ${BUILD}"; exit 1 ;;
+          esac
