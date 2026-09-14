@@ -110,3 +110,12 @@ if [ -n "${ADDITIONAL_CONFIG}" ] && [ "${ADDITIONAL_CONFIG}" != "null" ]; then
 fi
 
 echo "Alloy config generated at ${CONFIG_FILE}"
+
+# Fail fast, with the parser's message, rather than let the service crash-loop
+# on a bad loki_url or additional_config where nobody is watching. s6 stops
+# the container when this oneshot exits non-zero, and the add-on log says why.
+if ! /usr/bin/alloy validate "${CONFIG_FILE}"; then
+    echo "!! the generated Alloy config is invalid - see above. Check loki_url and additional_config."
+    exit 1
+fi
+echo "Alloy config validated"

@@ -1,8 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, the GitHub Actions and the Loki used in CI. EVERY bump automerges once CI is green - and CI runs the built image under the AppArmor profile in enforce mode against a real journal and a real Loki, so a release that needs a path the profile does not grant, or that breaks the journal reader, never merges. A merge publishes an image; Home Assistant installs it through the add-on's auto-update.",
+  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, the GitHub Actions and the Loki used in CI. CONTENT (Alloy, base image digest, CI Loki) automerges once the e2e gate is green - the gate genuinely vets those. The ACTIONS that build and publish are pinned by commit SHA and their bumps stay manual PRs: a compromised action can push a poisoned image under a good tag, and no e2e catches that. A merge publishes an image; Home Assistant installs it through the add-on's auto-update.",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
   ],
   "labels": [
     "dependencies"
@@ -64,7 +65,9 @@
         "ghcr.io/home-assistant/base-debian"
       ],
       "versioning": "regex:^trixie-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
-      "automerge": true
+      "automerge": true,
+      "minimumReleaseAge": "3 days",
+      "pinDigests": true
     },
     {
       "description": "Pin the builder actions to their release tags, not a floating branch",
@@ -77,11 +80,22 @@
       "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{2})\\.(?<patch>\\d+)$"
     },
     {
-      "description": "GitHub Actions and the CI Loki image automerge after CI",
+      "description": "The CI Loki (a service container in build-app.yaml) is content the gate exercises: automerge, digest-pinned",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "grafana/loki"
+      ],
+      "pinDigests": true,
+      "automerge": true
+    },
+    {
+      "description": "Actions never automerge; Renovate proposes SHA bumps (with the version in a comment) for a human to read",
       "matchManagers": [
         "github-actions"
       ],
-      "automerge": true
+      "automerge": false
     }
   ]
 }

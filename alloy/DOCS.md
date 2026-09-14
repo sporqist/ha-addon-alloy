@@ -51,6 +51,16 @@ Note: This is injected as-is into the config file. Syntax errors will prevent Al
 - **"timestamp too old" in Loki**: Normal on first start. Alloy reads the full journal history; Loki rejects entries older than its `reject_old_samples_max_age`. Resolves in 1-2 minutes.
 - **AppArmor**: the Alloy process runs under a custom profile. Denials show on the HA OS host as `journalctl _TRANSPORT="audit"` lines with `apparmor="DENIED"` (or `"ALLOWED"` while the profile is in complain mode). Report them with the line quoted; they are the input for tightening the profile.
 
+## Unattended updates - what this posture is, and what it is not for
+
+This add-on updates itself: Renovate proposes each Grafana Alloy release (after it is at least 3 days old), CI builds the image and runs it **under its AppArmor profile in enforce mode against a real journal and a real Loki**, a green gate automerges, the image is published, and Home Assistant's per-add-on auto-update installs it. The actions that build and publish are pinned by commit SHA and their bumps stay manual - a compromised build action is the one thing the gate cannot catch.
+
+That is acceptable **because the blast radius is bounded**: a bad update stops log shipping from one host. It does not touch Home Assistant Core, the Supervisor, or anything the house depends on. **Do not copy this posture onto an add-on that automations, heating, locks or lights depend on.**
+
+What CI cannot reproduce is your host. So pair auto-update with an alert on the receiving side that fires when the journal stream goes silent (`count_over_time({job="ha-journal", instance="..."}[30m]) == 0`). Home Assistant does **not** roll back an unhealthy add-on; it sits there until something notices.
+
+**Rollback** is a revert: every published version tag stays on GHCR. Open a PR that sets `version:` in `config.yaml` and `ALLOY_VERSION` in the Dockerfile back to the last good release; once merged and published, Home Assistant "updates" to it.
+
 ## Support
 
 Report issues at: https://github.com/sporqist/ha-addon-alloy/issues

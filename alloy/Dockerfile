@@ -9,8 +9,10 @@
 # what makes this add-on work at all, so it is installed by name below rather
 # than relied on as a side effect of the base image.
 #
-# Pinned tag, multi-arch manifest (amd64 + arm64). Renovate tracks it.
-FROM ghcr.io/home-assistant/base-debian:trixie-2026.08.0
+# Pinned tag AND digest of the multi-arch index (amd64 + arm64): a tag can be
+# repointed, a digest cannot. Renovate bumps both together as a content change,
+# so a new base still passes through the e2e gate.
+FROM ghcr.io/home-assistant/base-debian:trixie-2026.08.0@sha256:01e153da2c2579f2cf5010901da7bc31b1dd035921ea46ccaff22e521efa74a7
 
 # Renovate tracks this against grafana/alloy releases and bumps config.yaml's
 # version in the same PR: the add-on version IS the Alloy version.
