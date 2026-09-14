@@ -47,6 +47,8 @@ Grafana Alloy's debug UI (component health, pipeline graph) listens on port 1234
 
 This exists so that the built-in options can stay few and conventional (`hostname`, `unit`, `level` are what the ecosystem's dashboards expect) while nobody is locked out of doing it differently. The configuration is still validated before start.
 
+One thing to know when writing your own pipeline: set the `job` label in a `loki.process` stage (`stage.static_labels { values = { job = "..." } }`), not in `loki.source.journal`'s `labels`. Grafana Alloy 1.19.0–1.19.2 overwrite a job declared on the source with the component id ([grafana/alloy#6980](https://github.com/grafana/alloy/issues/6980)); a stage-set label is honoured by every version. The built-in pipeline does it this way.
+
 ## Advanced: Additional Config
 
 The `additional_config` option lets you append raw Grafana Alloy config blocks. For example, to also scrape a file:

@@ -298,11 +298,12 @@ fi
 say "3c. raw_config: additional_config is the whole pipeline"
 # A user-written pipeline with its own label names (unit_name instead of
 # unit, a job of its own). Nothing of the generated pipeline may appear.
+# The job is set in a stage, as DOCS.md tells raw_config users to: Alloy
+# 1.19.0-1.19.2 overwrite a job declared on the source (grafana/alloy#6980).
 RAW_PIPELINE='loki.source.journal "mine" {
   path          = "/var/log/journal"
-  forward_to    = [loki.write.mine.receiver]
+  forward_to    = [loki.process.mine.receiver]
   relabel_rules = loki.relabel.mine.rules
-  labels        = { job = "e2e-raw" }
 }
 loki.relabel "mine" {
   forward_to = []
@@ -310,6 +311,12 @@ loki.relabel "mine" {
     source_labels = ["__journal__systemd_unit"]
     target_label  = "unit_name"
   }
+}
+loki.process "mine" {
+  stage.static_labels {
+    values = { job = "e2e-raw" }
+  }
+  forward_to = [loki.write.mine.receiver]
 }
 loki.write "mine" {
   endpoint {
