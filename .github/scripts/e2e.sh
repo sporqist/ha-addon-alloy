@@ -233,11 +233,27 @@ fi
 
 say "0. The image carries the Alloy version config.yaml promises"
 # config.yaml carries <alloy>.<add-on revision>; the first three components must
-# be the Alloy inside the image.
-want=$(sed -n 's/^version: "\(.*\)"$/\1/p' "$APP/config.yaml" | cut -d. -f1-3)
+# be the Alloy inside the image. A VARIANT (alloy-host) is built on top of the
+# base under test here - its own config.yaml still names the published base
+# until Renovate bumps it after that base publishes - so for a variant the
+# promise to check is the base's config.yaml, the one this image was built
+# from. Its own version is asserted against the published base by Renovate's
+# bump PR, which builds on that base.
+VERSION_SRC="$APP/config.yaml"
+[ "$SLUG" = "alloy" ] || VERSION_SRC="alloy/config.yaml"
+want=$(sed -n 's/^version: "\(.*\)"$/\1/p' "$VERSION_SRC" | cut -d. -f1-3)
 have=$(docker run --rm --entrypoint /usr/bin/alloy "$IMAGE" --version | sed -n 's/^alloy, version v\([^ ]*\).*/\1/p')
 echo "config.yaml alloy version=$want  image alloy=$have"
 [ -n "$want" ] && [ "$want" = "$have" ] || fail "version mismatch: the published tag would lie about what is inside"
+if [ "$SLUG" != "alloy" ]; then
+  # The variant's own version is <base tag>.<rev>: its first four components
+  # must be the base tag pinned in its Dockerfile. Renovate bumps both in one
+  # PR; this catches a hand edit that moves one without the other.
+  pinned=$(sed -n 's/^ARG BASE_IMAGE=ghcr.io\/sporqist\/ha-addon-alloy:\([0-9.]*\)@.*/\1/p' "$APP/Dockerfile")
+  own=$(sed -n 's/^version: "\(.*\)"$/\1/p' "$APP/config.yaml" | cut -d. -f1-4)
+  echo "$APP version tracks base tag: pinned=$pinned own=$own"
+  [ -n "$pinned" ] && [ "$pinned" = "$own" ] || fail "$APP/config.yaml version does not track the base tag pinned in its Dockerfile"
+fi
 
 say "2. Default options: faithful and minimal"
 start_addon "{\"loki_url\":\"$LOKI_PUSH\",\"log_level\":\"info\"}"

@@ -109,14 +109,17 @@
       "automerge": true
     },
     {
-      "description": "Actions never automerge; Renovate proposes SHA bumps (with the version in a comment) for a human to read",
+      "description": "Actions (uses: lines, github-tags datasource) never automerge; Renovate proposes SHA bumps for a human to read. Docker images referenced in workflows are content and keep their own rules.",
       "matchManagers": [
         "github-actions"
       ],
-      "automerge": false
+      "automerge": false,
+      "matchDatasources": [
+        "github-tags"
+      ]
     },
     {
-      "description": "The host variant is built FROM the published base: tag+digest in its Dockerfile and the version in its config.yaml move together, gated and automerged like content. Loose versioning for the 4-part base tag.",
+      "description": "The host variant is built FROM the published base: tag+digest in its Dockerfile and the version in its config.yaml move together, gated and automerged like content. No release-age hold - it is our own image, already gated once. Loose versioning for the 4-part base tag.",
       "matchPackageNames": [
         "ghcr.io/sporqist/ha-addon-alloy"
       ],
