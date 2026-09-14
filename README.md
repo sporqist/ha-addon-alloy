@@ -12,7 +12,7 @@ Grafana Alloy is the official successor to Promtail, Grafana Agent, and Grafana 
 
 1. Open **Settings** > **Add-ons** > **Add-on Store**
 2. Click the overflow menu (three dots, top-right) > **Repositories**
-3. Paste: `https://github.com/ecohash-co/ha-addon-alloy`
+3. Paste: `https://github.com/sporqist/ha-addon-alloy`
 4. Click **Add** > **Close**
 5. Find **Grafana Alloy** in the store and click **Install**
 
@@ -37,7 +37,17 @@ Labels applied: `unit`, `hostname`, `syslog_identifier`, `transport`, `container
 
 ## Debug UI
 
-Access the Alloy pipeline inspector at `http://<haos-ip>:12345`.
+Alloy's unauthenticated debug UI is not published on the host by default. Map `12345/tcp` in the add-on's Network settings only while debugging.
+
+## What this fork changes
+
+Forked from [ecohash-co/ha-addon-alloy](https://github.com/ecohash-co/ha-addon-alloy) (MIT) to run unattended in two households:
+
+- **AppArmor enabled** with a custom profile (upstream shipped `apparmor: false`).
+- **Pre-built images** on GHCR from the `home-assistant/builder` actions; the HA host pulls and never builds.
+- **Checksum-verified Alloy download** against Grafana's published `SHA256SUMS`.
+- **Renovate** tracks Alloy releases, the base image and the actions; the add-on version is the Alloy version.
+- `libsystemd0` installed explicitly, `build.yaml` removed, debug port unmapped by default, unused `addon_config` mapping dropped.
 
 ## License
 
