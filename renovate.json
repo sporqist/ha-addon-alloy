@@ -1,9 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, and the GitHub Actions. Every bump is a PR; nothing automerges - the operator decides what runs inside Home Assistant.",
+  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, and the GitHub Actions. Actions, the base image and Alloy PATCH releases automerge once CI is green; Alloy minor/major stay PRs, because the AppArmor profile is a list of what the current Alloy touches and a new minor can touch more. A merge only publishes an image - Home Assistant installs it when the operator updates the add-on.",
   "extends": ["config:recommended"],
   "labels": ["dependencies"],
   "dependencyDashboard": true,
+  "platformAutomerge": false,
+  "automergeType": "pr",
   "customManagers": [
     {
       "customType": "regex",
@@ -32,10 +34,22 @@
       "commitMessageTopic": "Grafana Alloy"
     },
     {
-      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line",
+      "description": "Alloy patch releases automerge after CI; minor and major wait for a human and a changelog read",
+      "matchDepNames": ["grafana/alloy"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line, and automerge - CI rebuilds the image on the PR",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/home-assistant/base-debian"],
-      "versioning": "regex:^trixie-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+      "versioning": "regex:^trixie-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
+      "automerge": true
+    },
+    {
+      "description": "GitHub Actions bumps automerge after CI",
+      "matchManagers": ["github-actions"],
+      "automerge": true
     },
     {
       "description": "Pin the builder actions to their release tags, not a floating branch",
