@@ -142,6 +142,41 @@ probe() {
   echo "line received under job=$job: $STREAM"
 }
 
+# probe_level <expected level> <message> [FIELD=value ...]: write a journal
+# entry that looks like a docker container's stderr line (CONTAINER_NAME set,
+# PRIORITY 3 = err) with the given MESSAGE and extra fields, through the
+# journal's native API, and assert the level label Loki holds for it.
+# CI only: needs the host journal and python3-systemd.
+probe_level() {
+  local want="$1" msg="$2"; shift 2
+  local text="lvl-$RUN_ID-$RANDOM"
+  # Message and fields go through a file, never argv: sudo logs its command
+  # line to the journal, and that line would carry the probe text too.
+  { printf '%s %s\n' "$msg" "$text"; for kv in "$@"; do printf '%s\n' "$kv"; done; } > /tmp/ci-level.txt
+  sudo python3 - /tmp/ci-level.txt <<'PY'
+import sys
+from systemd import journal
+lines = open(sys.argv[1]).read().splitlines()
+fields = dict(kv.split("=", 1) for kv in lines[1:])
+journal.send(lines[0], CONTAINER_NAME="e2e-container", PRIORITY=3, SYSLOG_IDENTIFIER="ci-probe", **fields)
+PY
+  local q="" got="" hit=""
+  for _ in $(seq 1 24); do
+    sleep 5
+    q=$(curl -sG -H 'X-Loki-Response-Encoding-Flags: categorize-labels' "$LOKI_QUERY/loki/api/v1/query_range" \
+          --data-urlencode "query={job=\"$CUR_JOB\"} |= \"$text\"" \
+          --data-urlencode "start=$(( $(date +%s) - 900 ))000000000" \
+          --data-urlencode "end=$(( $(date +%s) + 60 ))000000000" --data-urlencode "limit=5")
+    case "$q" in *"$text"*)
+      hit=$(printf '%s' "$q" | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(json.dumps([{"labels": x["stream"], "line": x["values"][0][1][:80]} for x in r]))')
+      got=$(printf '%s' "$q" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["result"][0]["stream"].get("level",""))'); break ;;
+    esac
+  done
+  [ "$got" = "$want" ] || fail "level for message '$msg' ($*) is '$got', expected '$want'; matched: $hit"
+  echo "level_from_message: '$msg' ($*) -> level=$got"
+}
+CUR_JOB="systemd-journal"
+
 # assert_labels <expected-sorted-comma-list> : exact label set of $STREAM,
 # ignoring what Loki adds on its own (service_name from its service discovery).
 assert_labels() {
@@ -224,6 +259,24 @@ if [ -z "$LOCAL" ]; then
   printf '%s' "$STREAM" | python3 -c 'import json,sys; l=json.load(sys.stdin)["labels"]; sys.exit(0 if l.get("syslog_identifier")=="ci-probe" else 1)' \
     || fail "syslog_identifier label wrong: $STREAM"
   echo "custom label set exact; structured metadata carried"
+  # level_from_message on the JSON path: the level must come from MESSAGE
+  # alone. A level token in another journal field must not be taken.
+  CUR_JOB="e2e-custom"
+  probe_level warning "level=warn container said so"
+  probe_level error   "a plain line with no level token" "CONTAINER_TAG=level=info"
+  probe_level info    "INFO: bare token form"
+fi
+
+say "3b. level_from_message on the plain (non-JSON) path"
+if [ -z "$LOCAL" ]; then
+  start_addon "{\"loki_url\":\"$LOKI_PUSH\",\"log_level\":\"info\",\"job\":\"e2e-plain\",\"level_from_message\":true}"
+  CUR_JOB="e2e-plain"
+  probe_level warning "level=warn container said so"
+  probe_level error   "a plain line with no level token" "CONTAINER_TAG=level=info"
+  probe_level info    "INFO: bare token form"
+  CUR_JOB="systemd-journal"
+else
+  echo "skipped (E2E_LOCAL: needs the host journal)"
 fi
 
 say "5. Metrics: an authenticated scrape reaches Prometheus through remote_write"

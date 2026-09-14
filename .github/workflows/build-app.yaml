@@ -118,8 +118,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # A variant built FROM the published base (alloy-host) is tested against
+      # THIS commit's base, not the published one: the gate then proves the
+      # combination that exists after the base publishes and Renovate bumps
+      # the variant's pin - otherwise a base fix could never pass the gate
+      # here, since the variant would still be running the old generator.
+      # The publish job builds the variant from its Dockerfile as committed,
+      # i.e. from the pinned published base; the bump PR re-gates that.
       - name: Build the amd64 image on the runner
-        run: docker buildx build --load -t addon-under-test "./${{ inputs.app }}"
+        run: |
+          if [[ "${{ inputs.app }}" != "alloy" && -d alloy ]]; then
+            docker buildx build --load -t base-under-test ./alloy
+            docker buildx build --load --build-arg BASE_IMAGE=base-under-test -t addon-under-test "./${{ inputs.app }}"
+          else
+            docker buildx build --load -t addon-under-test "./${{ inputs.app }}"
+          fi
 
       - name: Wait for Loki
         run: |
@@ -131,7 +144,7 @@ jobs:
 
       - name: Run the end-to-end test
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq apparmor-utils >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq apparmor-utils python3-systemd >/dev/null
           APP="${{ inputs.app }}" bash .github/scripts/e2e.sh addon-under-test \
             http://host.docker.internal:3100/loki/api/v1/push \
             http://localhost:3100
