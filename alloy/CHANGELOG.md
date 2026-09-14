@@ -1,7 +1,33 @@
 # Changelog
 
-The add-on version is the bundled Grafana Alloy version. Alloy's own release
-notes: https://github.com/grafana/alloy/releases
+The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
+release notes: https://github.com/grafana/alloy/releases
+
+## 1.13.2.1 - 2026-09-14
+
+Faithful, minimal defaults; every transformation opt-in. Made for anyone's
+Loki, not one fleet's.
+
+### Changed
+- Default stream labels are now `hostname`, `unit`, `level` only.
+  `syslog_identifier`, `container_name` and `transport` are no longer labels
+  by default - each one multiplied streams in the receiving Loki. Add them
+  back with `stream_labels` if you relied on them.
+- `job` is an option (default `systemd-journal`, unchanged).
+
+### Added
+- `stream_labels`: choose which journal fields become stream labels
+  (`hostname`, `unit`, `level`, `syslog_identifier`, `container_name`,
+  `transport`, `priority`).
+- `structured_metadata` (off): carry the detail fields as Loki structured
+  metadata instead of labels. Needs Loki 2.9+ with it enabled.
+- `level_from_message` (off): re-derive `level` from the line for container
+  streams that docker logged at priority `err` (its stderr), so an add-on's
+  own `WARN`/`INFO` lines stop arriving as errors.
+- Alloy usage reporting is off (`--disable-reporting`).
+- CI: the gate now runs the image twice under the AppArmor profile - default
+  options and a fully opinionated set - and asserts the exact label set and
+  structured-metadata placement in Loki.
 
 ## 1.13.2 - 2026-09-14
 
