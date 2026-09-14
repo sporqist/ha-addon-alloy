@@ -1,4 +1,4 @@
-# Grafana Alloy for Home Assistant
+# Alloy
 
 Ship Home Assistant OS logs to a remote [Grafana Loki](https://grafana.com/oss/loki/) instance using [Grafana Alloy](https://grafana.com/docs/alloy/latest/).
 

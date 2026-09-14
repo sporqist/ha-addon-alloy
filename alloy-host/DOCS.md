@@ -1,6 +1,6 @@
-# Grafana Alloy for Home Assistant (host metrics)
+# Alloy (host metrics)
 
-Everything the **Grafana Alloy** add-on does - the journal to Grafana Loki, optional Home Assistant metrics - plus **host metrics** of the Home Assistant OS machine: CPU, memory, load, disk I/O, filesystem usage, memory pressure and temperatures, from Grafana Alloy's `prometheus.exporter.unix`.
+Everything the **Alloy** add-on does - the journal to Grafana Loki, optional Home Assistant metrics - plus **host metrics** of the Home Assistant OS machine: CPU, memory, load, disk I/O, filesystem usage, memory pressure and temperatures, from Grafana Alloy's `prometheus.exporter.unix`.
 
 Install **this or the base add-on, not both** - each reads the whole journal.
 

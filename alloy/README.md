@@ -1,4 +1,4 @@
-# Grafana Alloy for Home Assistant
+# Alloy
 
 ![Supports amd64 Architecture](https://img.shields.io/badge/amd64-yes-green.svg)
 ![Supports aarch64 Architecture](https://img.shields.io/badge/aarch64-yes-green.svg)

@@ -1,4 +1,4 @@
-# Home Assistant App: Grafana Alloy
+# Alloy - a Home Assistant add-on
 
 Ship Home Assistant OS logs to [Grafana Loki](https://grafana.com/oss/loki/) using [Grafana Alloy](https://grafana.com/docs/alloy/latest/) — the modern replacement for the deprecated Promtail add-on.
 
@@ -14,7 +14,7 @@ Grafana Alloy is the official successor to Promtail, Grafana Agent, and Grafana 
 2. Click the overflow menu (three dots, top-right) > **Repositories**
 3. Paste: `https://github.com/sporqist/ha-addon-alloy`
 4. Click **Add** > **Close**
-5. Find **Grafana Alloy** in the store and click **Install**
+5. Find **Alloy** (or **Alloy (host metrics)**) in the store and click **Install**
 
 ## Configuration
 

@@ -3,6 +3,19 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
+## 1.19.2.1 - 2026-09-15
+
+### Changed
+- The add-on is called **Alloy** - the ecosystem's convention (the Loki,
+  Promtail, Grafana and InfluxDB add-ons are all named after what they
+  package), and a word that is not on Grafana Labs' trademark list, unlike
+  "Grafana Alloy". Descriptions keep "Grafana Alloy" and "Grafana Loki" as
+  adjectives for the products, with the disclaimer.
+- Final artwork: the "lines out" mark - journal lines, one leaving - in rust
+  on a dark tile, as icon and logo.
+- Grafana Alloy 1.19.2 (the first release taken through the gate unattended:
+  Renovate #2, both add-ons, zero AppArmor denials).
+
 ## 1.13.2.7 - 2026-09-14
 
 ### Fixed

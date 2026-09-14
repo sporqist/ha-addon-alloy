@@ -1,20 +1,20 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 #
-# THE HOST VARIANT. Everything the base "Grafana Alloy" add-on does, plus host
+# THE HOST VARIANT. Everything the base "Alloy" add-on does, plus host
 # metrics (CPU, memory, load, disk, pressure, temperatures) from
 # prometheus.exporter.unix. Install this INSTEAD of the base, never alongside -
 # both would read the journal.
-name: Grafana Alloy (host metrics)
+name: Alloy (host metrics)
 # <base image tag>.<host revision>. The first four components are the base
 # image this is built FROM (which carries the Alloy version in its first
 # three); the fifth is bumped for host-only changes. Renovate writes the new
 # base tag here when it bumps the Dockerfile's FROM.
-version: "1.13.2.3.5"
+version: "1.13.2.3.6"
 slug: alloy-host
 description: >-
   Ship the Home Assistant OS journal to Loki and host metrics (CPU, memory,
   load, disk, pressure, temperatures) to Prometheus with Grafana Alloy.
-  A superset of the Grafana Alloy add-on - install one or the other.
+  A superset of the Alloy add-on - install one or the other.
 url: https://github.com/sporqist/ha-addon-alloy
 arch:
   - aarch64
