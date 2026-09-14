@@ -27,6 +27,11 @@ ADDITIONAL_CONFIG=$(opt '.additional_config // ""')
 
 has_label() { case " ${STREAM_LABELS} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
+# The JSON path (every field of the entry available to the pipeline) exists
+# for structured_metadata and costs a parse and a restore per line. Only then.
+USE_JSON=false
+[ "${STRUCTURED_METADATA}" = "true" ] && USE_JSON=true
+
 # Detect the journal path: the directory holding the NEWEST journal file,
 # which is where journald is writing now. "First non-empty directory" chose
 # /var/log/journal on a host whose journald had gone volatile, leaving stale
@@ -71,10 +76,11 @@ logging {
   level = "${LOG_LEVEL}"
 }
 
-// The journal, as JSON so every field is available to the pipeline below.
+// As JSON only when structured_metadata needs the extra fields; otherwise the
+// line is the MESSAGE and nothing has to parse or restore it.
 loki.source.journal "journal" {
   path           = "${JOURNAL_PATH}"
-  format_as_json = true
+  format_as_json = ${USE_JSON}
   forward_to     = [loki.process.journal.receiver]
   relabel_rules  = loki.relabel.journal.rules
   labels         = {
@@ -104,10 +110,13 @@ fi
 echo "}" >> "${CONFIG_FILE}"
 
 # ── Pipeline ────────────────────────────────────────────────────────────────
-cat >> "${CONFIG_FILE}" <<'EOF'
+printf '\nloki.process "journal" {\n' >> "${CONFIG_FILE}"
 
-loki.process "journal" {
-  // Pull the fields the options refer to out of the JSON entry.
+if [ "${USE_JSON}" = "true" ]; then
+cat >> "${CONFIG_FILE}" <<'EOF'
+  // Pull the fields structured_metadata carries out of the JSON entry. The
+  // line is the JSON until stage.output restores the MESSAGE at the end, so
+  // every stage in between that reads content must say source = "message".
   stage.json {
     expressions = {
       message           = "MESSAGE",
@@ -118,6 +127,7 @@ loki.process "journal" {
     }
   }
 EOF
+fi
 
 if [ "${STRUCTURED_METADATA}" = "true" ]; then
     # One home per field: what is already a stream label is not also metadata.
@@ -132,21 +142,30 @@ if [ "${STRUCTURED_METADATA}" = "true" ]; then
 fi
 
 if [ "${LEVEL_FROM_MESSAGE}" = "true" ]; then
-cat >> "${CONFIG_FILE}" <<'EOF'
+    # With the JSON path on, the line is the whole journal entry until the end
+    # of the pipeline; the level must be read from the MESSAGE field, or a
+    # level token in any other field (a command line, a tag) would be taken.
+    LEVEL_SOURCE=""
+    [ "${USE_JSON}" = "true" ] && LEVEL_SOURCE='      source     = "message"'
+cat >> "${CONFIG_FILE}" <<EOF
 
   // Docker's journald driver logs a container's stderr at priority err, so a
   // WARN or INFO line written to stderr arrives as level="error". Scoped to
-  // container streams at that priority; the level is re-derived from the line
-  // (logfmt level=..., or a bare LEVEL token) and falls back to "error".
+  // container streams at that priority; the level is re-derived from the
+  // message (logfmt level=..., or a bare LEVEL token) and falls back to "error".
   stage.match {
-    selector = "{level=\"error\", container_name=~\".+\"}"
+    selector = "{level=\\"error\\", container_name=~\\".+\\"}"
 
     stage.regex {
-      expression = "(?:^|\\s)level=(?P<logfmt_level>trace|debug|info|warn|warning|error|fatal|critical)(?:\\s|$)"
+${LEVEL_SOURCE}
+      expression = "(?:^|\\\\s)level=(?P<logfmt_level>trace|debug|info|warn|warning|error|fatal|critical)(?:\\\\s|$)"
     }
     stage.regex {
-      expression = "(?:^|\\s)(?P<bare_level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:\\s|:)"
+${LEVEL_SOURCE}
+      expression = "(?:^|\\\\s)(?P<bare_level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)(?:\\\\s|:)"
     }
+EOF
+cat >> "${CONFIG_FILE}" <<'EOF'
     stage.template {
       source   = "derived_level"
       template = "{{ if .logfmt_level }}{{ if eq .logfmt_level \"warn\" }}warning{{ else if eq .logfmt_level \"critical\" }}crit{{ else }}{{ .logfmt_level }}{{ end }}{{ else if .bare_level }}{{ if eq .bare_level \"TRACE\" }}trace{{ else if eq .bare_level \"DEBUG\" }}debug{{ else if eq .bare_level \"INFO\" }}info{{ else if eq .bare_level \"WARN\" }}warning{{ else if eq .bare_level \"WARNING\" }}warning{{ else if eq .bare_level \"ERROR\" }}error{{ else if eq .bare_level \"FATAL\" }}fatal{{ else if eq .bare_level \"CRITICAL\" }}crit{{ else }}error{{ end }}{{ else }}error{{ end }}"
@@ -166,12 +185,16 @@ EOF
     fi
 fi
 
-cat >> "${CONFIG_FILE}" <<EOF
+if [ "${USE_JSON}" = "true" ]; then
+cat >> "${CONFIG_FILE}" <<'EOF'
 
   // The line itself is the journal MESSAGE again, not the JSON entry.
   stage.output {
     source = "message"
   }
+EOF
+fi
+cat >> "${CONFIG_FILE}" <<EOF
   stage.drop {
     expression = "^\\\\s*$"
   }
