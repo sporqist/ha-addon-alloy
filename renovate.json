@@ -26,12 +26,12 @@
     },
     {
       "customType": "regex",
-      "description": "The add-on version IS the Alloy version, so config.yaml moves with the same release",
+      "description": "The add-on version IS the Alloy version, so config.yaml moves with the same release. No ^ anchor: without a multiline flag it only matched at file start, and the file starts with a comment - Renovate's first PR bumped the Dockerfile alone.",
       "managerFilePatterns": [
         "/^alloy/config\\.yaml$/"
       ],
       "matchStrings": [
-        "^version: \"(?<currentValue>[^\"]+)\""
+        "\nversion: \"(?<currentValue>[^\"]+)\"\n"
       ],
       "depNameTemplate": "grafana/alloy",
       "datasourceTemplate": "github-releases",

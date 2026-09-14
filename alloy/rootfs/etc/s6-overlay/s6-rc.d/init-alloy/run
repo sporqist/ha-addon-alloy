@@ -12,9 +12,20 @@ LOKI_URL=$(jq -r '.loki_url' "${OPTIONS_FILE}")
 LOG_LEVEL=$(jq -r '.log_level // "info"' "${OPTIONS_FILE}")
 ADDITIONAL_CONFIG=$(jq -r '.additional_config // ""' "${OPTIONS_FILE}")
 
-# Detect journal path
+# Detect the journal path: the directory holding the NEWEST journal file,
+# which is where journald is writing now. "First non-empty directory" chose
+# /var/log/journal on a host whose journald had gone volatile, leaving stale
+# files there and every live entry in /run/log/journal - and Alloy then
+# shipped nothing, silently. HA OS is persistent, so both agree there.
 JOURNAL_PATH="/var/log/journal"
-if [ ! -d "${JOURNAL_PATH}" ] || [ -z "$(ls -A "${JOURNAL_PATH}" 2>/dev/null)" ]; then
+newest=$(find /var/log/journal /run/log/journal -type f -name '*.journal' -printf '%T@ %h\n' 2>/dev/null \
+         | sort -n | tail -1 | cut -d' ' -f2-)
+if [ -n "${newest}" ]; then
+    case "${newest}" in
+        /run/log/journal*) JOURNAL_PATH="/run/log/journal" ;;
+        *)                 JOURNAL_PATH="/var/log/journal" ;;
+    esac
+elif [ ! -d "${JOURNAL_PATH}" ] || [ -z "$(ls -A "${JOURNAL_PATH}" 2>/dev/null)" ]; then
     JOURNAL_PATH="/run/log/journal"
 fi
 
