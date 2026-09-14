@@ -59,6 +59,8 @@ That is acceptable **because the blast radius is bounded**: a bad update stops l
 
 What CI cannot reproduce is your host. So pair auto-update with an alert on the receiving side that fires when the journal stream goes silent (`count_over_time({job="ha-journal", instance="..."}[30m]) == 0`). Home Assistant does **not** roll back an unhealthy add-on; it sits there until something notices.
 
+**When an Alloy bump stalls.** Some releases touch new files or need new syscalls. The gate then fails with `apparmor="DENIED"` lines naming the path, Renovate keeps the PR open and red, and nothing ships. That reads as "the profile needs a path", not "something broke": add the access to `apparmor.txt` in a PR of its own (as narrowly as the denial allows), merge it, and Renovate rebases and retries the bump on its own. Alloy 1.19 was the first case: its bundled Snowflake driver maps a library it extracts to `/tmp`, and its usage reporter reads the DMI UUID (reporting is off here).
+
 **Rollback** is a revert: every published version tag stays on GHCR. Open a PR that sets `version:` in `config.yaml` and `ALLOY_VERSION` in the Dockerfile back to the last good release; once merged and published, Home Assistant "updates" to it.
 
 ## Support

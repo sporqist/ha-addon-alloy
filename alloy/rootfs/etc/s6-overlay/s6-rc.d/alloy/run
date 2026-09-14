@@ -1,5 +1,8 @@
 #!/usr/bin/with-contenv bash
+# --disable-reporting: no anonymous usage reports to Grafana from a household.
+# It is also what made Alloy 1.19 read the machine's DMI product UUID.
 exec /usr/bin/alloy run \
     --server.http.listen-addr=0.0.0.0:12345 \
     --storage.path=/data/alloy \
+    --disable-reporting \
     /etc/alloy/config.alloy
