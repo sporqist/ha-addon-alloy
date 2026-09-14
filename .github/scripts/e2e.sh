@@ -99,7 +99,10 @@ probe() {
       -d "{\"streams\":[{\"stream\":{\"job\":\"$job\",\"e2e\":\"local\"},\"values\":[[\"$(date +%s)000000000\",\"$text\"]]}]}" \
       "$LOKI_PUSH" || fail "container cannot push to Loki at $LOKI_PUSH"
   else
-    logger -t ci-probe "$text"
+    # Inside a transient unit, so the line carries _SYSTEMD_UNIT like a real
+    # service's does; a bare `logger` from the runner's session has none, and
+    # the exact-label assertion below would then rightly find `unit` missing.
+    sudo systemd-run --quiet --wait --unit "ci-probe-$RANDOM" logger -t ci-probe "$text"
   fi
   for _ in $(seq 1 24); do
     sleep 5
