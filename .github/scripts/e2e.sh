@@ -22,7 +22,14 @@ NAME="alloy-e2e"
 PROBE="ci-probe-${GITHUB_RUN_ID:-local}-$RANDOM"
 
 say() { printf '\n== %s\n' "$*"; }
-fail() { printf '\n!! %s\n' "$*"; docker logs "$NAME" 2>&1 | tail -40 || true; exit 1; }
+aa_events() { sudo journalctl -k --since "-15min" -o cat | grep -E 'apparmor="(DENIED|ALLOWED|AUDIT)"' | grep -E 'ci_alloy|alloy_bin' || true; }
+fail() {
+  printf '\n!! %s\n' "$*"
+  printf -- '-- container log (tail) --\n'; docker logs "$NAME" 2>&1 | tail -40 || true
+  printf -- '-- apparmor events for the profile --\n'; aa_events
+  printf -- '-- docker security --\n'; docker info --format '{{json .SecurityOptions}}' 2>/dev/null || true
+  exit 1
+}
 
 say "1. AppArmor on the runner"
 sudo aa-enabled || fail "AppArmor is not enabled on this runner"
@@ -37,8 +44,11 @@ sudo aa-status | grep -q 'ci_alloy' || fail "profile not loaded"
 echo "profile loaded in enforce mode"
 
 say "2. Start the add-on under the profile"
-mkdir -p /tmp/addon-data
-printf '{"loki_url":"%s","log_level":"info"}' "$LOKI_PUSH" > /tmp/addon-data/options.json
+# Under the workspace, world-writable: the container runs as root and the
+# runner's docker may remap it; ownership must not be the thing under test.
+DATA="${RUNNER_TEMP:-/tmp}/addon-data"
+rm -rf "$DATA"; mkdir -p "$DATA"; chmod 777 "$DATA"
+printf '{"loki_url":"%s","log_level":"info"}' "$LOKI_PUSH" > "$DATA/options.json"
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 journal_mounts=()
 [ -d /var/log/journal ] && journal_mounts+=(-v /var/log/journal:/var/log/journal:ro)
@@ -47,7 +57,7 @@ journal_mounts=()
 docker run -d --name "$NAME" \
   --security-opt apparmor=ci_alloy \
   --add-host=host.docker.internal:host-gateway \
-  -v /tmp/addon-data:/data \
+  -v "$DATA:/data" \
   "${journal_mounts[@]}" \
   "$IMAGE" >/dev/null
 
@@ -77,9 +87,7 @@ done
 echo "line received by Loki with labels: $(printf '%s' "$q" | python3 -c 'import json,sys; s=json.load(sys.stdin)["data"]["result"][0]["stream"]; print({k:s[k] for k in ("job","unit","syslog_identifier","hostname","level") if k in s})')"
 
 say "4. Zero AppArmor denials for the profile"
-sudo journalctl -k --since "-10min" -o cat | grep -E 'apparmor="(DENIED|ALLOWED)"' | grep -E 'ci_alloy' > /tmp/aa.log || true
-if [ -s /tmp/aa.log ]; then
-  cat /tmp/aa.log
+if [ -n "$(aa_events | grep -E 'DENIED|ALLOWED')" ]; then
   fail "the profile denied (or would have denied) something - add it to apparmor.txt"
 fi
 echo "none"
