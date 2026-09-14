@@ -26,15 +26,15 @@ jobs:
       changed_apps: ${{ steps.filter.outputs.changed_apps }}
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Get changed files
         id: changed_files
-        uses: tj-actions/changed-files@v47
+        uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
 
       - name: Find app directories
         id: apps
-        uses: home-assistant/actions/helpers/find-addons@master
+        uses: home-assistant/actions/helpers/find-addons@58bff37c8947f690ace498be413a9b78d6f30f93 # master 2026-09
 
       - name: Filter changed apps
         id: filter
@@ -58,6 +58,11 @@ jobs:
             done
           fi
 
+          # On a pull request, every app is built regardless of the diff (see build-app)
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            changed_apps=(${APPS})
+          fi
+
           if [[ ${#changed_apps[@]} -gt 0 ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "changed_apps=$(jq -nc '$ARGS.positional' --args "${changed_apps[@]}")" >> "$GITHUB_OUTPUT"
@@ -65,10 +70,14 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # FAIL CLOSED ON PULL REQUESTS: every PR builds and runs the e2e gate, whatever
+  # it touched. The path filter only trims pushes to main (the publish path),
+  # where the image was already gated on the PR. A required check that passes
+  # because the gate was skipped is the same as no gate.
   build-app:
     name: Build ${{ matrix.app }}
     needs: init
-    if: needs.init.outputs.changed == 'true'
+    if: github.event_name == 'pull_request' || needs.init.outputs.changed == 'true'
     permissions:
       contents: read
       id-token: write
@@ -101,7 +110,9 @@ jobs:
         run: |
           echo "init=${INIT} build=${BUILD}"
           [[ "${INIT}" == "success" ]] || { echo "init failed"; exit 1; }
+          # skipped is acceptable only on a push (the PR already ran the gate)
           case "${BUILD}" in
-            success|skipped) exit 0 ;;
+            success) exit 0 ;;
+            skipped) [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]] && exit 0; echo "gate skipped on a PR"; exit 1 ;;
             *) echo "build ${BUILD}"; exit 1 ;;
           esac
