@@ -127,7 +127,11 @@ profile alloy-host flags=(attach_disconnected,mediate_deleted) {
     /sys/class/thermal/** r,
     # The class links above resolve into /sys/devices; AppArmor mediates the
     # resolved path, so grant those shapes and nothing else under /sys/devices.
-    /sys/devices/**/hwmon/** r,
+    # hwmon* covers both layouts: platform devices keep sensors under a
+    # hwmon/hwmonN/ directory, NVMe drives put hwmonN/ directly under the
+    # device (found by the gate on a runner with NVMe temperature sensors).
+    /sys/devices/**/hwmon*/ r,
+    /sys/devices/**/hwmon*/** r,
     /sys/devices/virtual/thermal/** r,
     /sys/devices/system/cpu/** r,
   }
