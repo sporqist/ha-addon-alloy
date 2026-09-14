@@ -30,14 +30,20 @@ IMAGE="${1:?image}"
 LOKI_PUSH="${2:?loki push url for the container}"
 LOKI_QUERY="${3:?loki base url for the runner}"
 LOCAL="${E2E_LOCAL:-}"
-PROFILE_SRC="alloy/apparmor.txt"
+# Which add-on directory is under test (alloy, or alloy-host). Its slug names
+# the AppArmor profile; the CI profile is ci_<slug> so the sub-profile's
+# peer=*_<slug> still matches.
+APP="${APP:-alloy}"
+SLUG=$(sed -n 's/^slug: *//p' "$APP/config.yaml")
+PROFILE_SRC="$APP/apparmor.txt"
+CI_PROFILE="ci_$SLUG"
 NAME="alloy-e2e"
 RUN_ID="${GITHUB_RUN_ID:-local}"
 
 say() { printf '\n== %s\n' "$*"; }
 aa_events() {
   [ -n "$LOCAL" ] && return 0
-  sudo journalctl -k --since "-15min" -o cat | grep -E 'apparmor="(DENIED|ALLOWED|AUDIT)"' | grep -E 'ci_alloy|alloy_bin' || true
+  sudo journalctl -k --since "-15min" -o cat | grep -E 'apparmor="(DENIED|ALLOWED|AUDIT)"' | grep -E "$CI_PROFILE|alloy_bin" || true
 }
 fail() {
   printf '\n!! %s\n' "$*"
@@ -55,7 +61,13 @@ start_addon() {
   # runner user cannot remove that afterwards.
   DATA="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/addon-data-$RANDOM$RANDOM"
   mkdir -p "$DATA"; chmod 777 "$DATA"
-  printf '%s' "$1" > "$DATA/options.json"
+  local opts="$1"
+  # The host variant has host_metrics on by default and refuses to start
+  # without somewhere to send them - so every run of it gets the Prometheus.
+  if [ "$SLUG" = "alloy-host" ]; then
+    opts=$(printf '%s' "$opts" | python3 -c "import json,sys; o=json.load(sys.stdin); o.setdefault('metrics_remote_write_url', 'http://host.docker.internal:$PROM_PORT/api/v1/write'); print(json.dumps(o))")
+  fi
+  printf '%s' "$opts" > "$DATA/options.json"
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   local journal_mounts=() security=()
   if [ -n "$LOCAL" ]; then
@@ -65,7 +77,7 @@ start_addon() {
     [ -d /var/log/journal ] && journal_mounts+=(-v /var/log/journal:/var/log/journal:ro)
     [ -d /run/log/journal ] && journal_mounts+=(-v /run/log/journal:/run/log/journal:ro)
     [ ${#journal_mounts[@]} -gt 0 ] || fail "no journal directory on this runner"
-    security+=(--security-opt apparmor=ci_alloy)
+    security+=(--security-opt "apparmor=$CI_PROFILE")
   fi
   docker run -d --name "$NAME" \
     "${security[@]}" \
@@ -168,13 +180,13 @@ if [ -n "$LOCAL" ]; then
 else
   sudo aa-enabled || fail "AppArmor is not enabled on this runner"
   # Home Assistant loads the profile under <repo-hash>_<slug>, so the sub-profile
-  # receives signals from peer=*_alloy. Mirror that shape: ci_alloy matches *_alloy.
+  # receives signals from peer=*_<slug>. Mirror that shape: ci_<slug> matches it.
   # The complain flag, if present, is stripped: the test must run in ENFORCE.
-  sed -e 's/^profile alloy /profile ci_alloy /' -e 's/,complain)/)/; s/(complain,/(/' "$PROFILE_SRC" > /tmp/ci_alloy.profile
-  grep -q '^profile ci_alloy ' /tmp/ci_alloy.profile || fail "profile rename did not take"
-  grep -q 'complain' /tmp/ci_alloy.profile && fail "complain flag still present after strip"
-  sudo apparmor_parser -r -W /tmp/ci_alloy.profile || fail "profile does not parse"
-  [ "$(sudo aa-status | grep -c 'ci_alloy')" -gt 0 ] || fail "profile not loaded"
+  sed -e "s/^profile $SLUG /profile $CI_PROFILE /" -e 's/,complain)/)/; s/(complain,/(/' "$PROFILE_SRC" > "/tmp/$CI_PROFILE.profile"
+  grep -q "^profile $CI_PROFILE " "/tmp/$CI_PROFILE.profile" || fail "profile rename did not take"
+  grep -q 'complain' "/tmp/$CI_PROFILE.profile" && fail "complain flag still present after strip"
+  sudo apparmor_parser -r -W "/tmp/$CI_PROFILE.profile" || fail "profile does not parse"
+  [ "$(sudo aa-status | grep -c "$CI_PROFILE")" -gt 0 ] || fail "profile not loaded"
   echo "profile loaded in enforce mode"
   echo "runner journald writes to: $(sudo journalctl --header 2>/dev/null | sed -n 's/^File path: //p' | head -1)"
 fi
@@ -182,7 +194,7 @@ fi
 say "0. The image carries the Alloy version config.yaml promises"
 # config.yaml carries <alloy>.<add-on revision>; the first three components must
 # be the Alloy inside the image.
-want=$(sed -n 's/^version: "\(.*\)"$/\1/p' alloy/config.yaml | cut -d. -f1-3)
+want=$(sed -n 's/^version: "\(.*\)"$/\1/p' "$APP/config.yaml" | cut -d. -f1-3)
 have=$(docker run --rm --entrypoint /usr/bin/alloy "$IMAGE" --version | sed -n 's/^alloy, version v\([^ ]*\).*/\1/p')
 echo "config.yaml alloy version=$want  image alloy=$have"
 [ -n "$want" ] && [ "$want" = "$have" ] || fail "version mismatch: the published tag would lie about what is inside"
@@ -227,6 +239,21 @@ done
 grep -q '200 authenticated' /tmp/stub.log || fail "Prometheus has the metric but the stub never saw an authenticated scrape"
 echo "authenticated scrape -> remote_write -> Prometheus: e2e_stub_up{job=\"homeassistant\"} = 1"
 
+if [ "$SLUG" = "alloy-host" ]; then
+  say "6. Host metrics (alloy-host): the unix exporter's series reach Prometheus"
+  # host_metrics defaults on in this variant; only the remote_write is needed.
+  start_addon "{\"loki_url\":\"$LOKI_PUSH\",\"log_level\":\"info\",\"metrics_remote_write_url\":\"http://host.docker.internal:$PROM_PORT/api/v1/write\",\"host_metrics_interval\":\"5s\"}"
+  found=""
+  for _ in $(seq 1 24); do
+    sleep 5
+    v=$(curl -sG "http://localhost:$PROM_PORT/api/v1/query" --data-urlencode 'query=count(node_cpu_seconds_total{job="node"}) and on() node_memory_MemTotal_bytes{job="node"} > 0' \
+          | python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "")' 2>/dev/null || true)
+    [ -n "$v" ] && [ "$v" != "0" ] && { found=1; break; }
+  done
+  [ -n "$found" ] || fail "node_cpu_seconds_total / node_memory_MemTotal_bytes never arrived in Prometheus under job=node"
+  echo "unix exporter -> remote_write -> Prometheus: cpu series present, MemTotal > 0"
+fi
+
 say "4. Zero AppArmor denials for the profile"
 if [ -n "$LOCAL" ]; then
   echo "skipped (E2E_LOCAL)"
@@ -238,5 +265,5 @@ else
 fi
 
 docker rm -f "$NAME" >/dev/null
-[ -n "$LOCAL" ] || sudo apparmor_parser -R /tmp/ci_alloy.profile || true
+[ -n "$LOCAL" ] || sudo apparmor_parser -R "/tmp/$CI_PROFILE.profile" || true
 say "PASS"

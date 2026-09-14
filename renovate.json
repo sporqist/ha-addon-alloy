@@ -38,6 +38,19 @@
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$",
       "versioningTemplate": "loose"
+    },
+    {
+      "customType": "regex",
+      "description": "alloy-host's version is <base tag>.<host rev>; when the base image tag moves, this moves with it (Renovate writes the plain base tag, host rev restarts at the next host-only change)",
+      "managerFilePatterns": [
+        "/^alloy-host/config\\.yaml$/"
+      ],
+      "matchStrings": [
+        "\nversion: \"(?<currentValue>[^\"]+)\"\n"
+      ],
+      "depNameTemplate": "ghcr.io/sporqist/ha-addon-alloy",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "loose"
     }
   ],
   "packageRules": [
@@ -101,6 +114,16 @@
         "github-actions"
       ],
       "automerge": false
+    },
+    {
+      "description": "The host variant is built FROM the published base: tag+digest in its Dockerfile and the version in its config.yaml move together, gated and automerged like content. Loose versioning for the 4-part base tag.",
+      "matchPackageNames": [
+        "ghcr.io/sporqist/ha-addon-alloy"
+      ],
+      "groupName": "base image for alloy-host",
+      "versioning": "loose",
+      "pinDigests": true,
+      "automerge": true
     }
   ]
 }
