@@ -3,6 +3,18 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
+## 1.13.2.3 - 2026-09-14
+
+### Added
+- `metrics_instance`: the `instance` label on metrics (default: the
+  container's hostname, which is not the Home Assistant OS hostname).
+- Support for the `alloy-host` variant: an image built FROM this one with a
+  marker file gets host metrics from `prometheus.exporter.unix`. Nothing
+  changes for this add-on.
+
+### Fixed
+- The scrape timeout derivation is one function for every scrape.
+
 ## 1.13.2.2 - 2026-09-14
 
 ### Added

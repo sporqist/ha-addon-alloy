@@ -44,8 +44,17 @@ elif [ ! -d "${JOURNAL_PATH}" ] || [ -z "$(ls -A "${JOURNAL_PATH}" 2>/dev/null)"
     JOURNAL_PATH="/run/log/journal"
 fi
 
+# The image marks its variant: the base has no /etc/alloy-addon/variant, the
+# alloy-host image (FROM the base) writes "host" there. Same generator, one
+# extra exporter for that variant.
+VARIANT=$(cat /etc/alloy-addon/variant 2>/dev/null || echo base)
+HOST_METRICS=false
+if [ "${VARIANT}" = "host" ]; then
+    HOST_METRICS=$(opt '.host_metrics // true')
+fi
+
 echo "-----------------------------------------------------------"
-echo " Grafana Alloy for Home Assistant"
+echo " Grafana Alloy for Home Assistant (${VARIANT})"
 echo " Loki URL: ${LOKI_URL}"
 echo " Journal path: ${JOURNAL_PATH}"
 echo " Log level: ${LOG_LEVEL}"
@@ -177,53 +186,39 @@ loki.write "loki" {
 }
 EOF
 
-# ── Home Assistant metrics (opt-in) ─────────────────────────────────────────
-# Scrapes an OpenMetrics endpoint - by default Home Assistant's own
-# /api/prometheus, which needs `prometheus:` in configuration.yaml - and
-# remote-writes it. Off: nothing below is read and the config above is all
-# there is. The token never enters the config file: it is written to a 0600
-# file and referenced, so the config stays readable without the secret.
+# ── Metrics: the one remote_write both scrapes feed ─────────────────────────
+# Credentials never enter the config file: token and password are written to
+# 0600 files and referenced, so the config stays readable without them. When
+# nothing needs them the files are removed - a disabled feature leaves no
+# credential on disk.
 TOKEN_FILE="/data/metrics.token"
-if [ "${METRICS_ENABLED}" = "true" ]; then
-    METRICS_URL=$(opt '.metrics_url // "http://homeassistant:8123/api/prometheus"')
-    METRICS_TOKEN=$(opt '.metrics_token // ""')
+RW_PASSWORD_FILE="/data/remote_write.password"
+# Alloy refuses a scrape_timeout above the interval, and `alloy validate` does
+# not see that (a component build error: the service would crash-loop).
+# Timeout = half the interval, capped at Alloy's 10s default.
+timeout_for() {
+    local n="${1%[smh]}" u="${1##*[0-9]}" t
+    if [ "${u}" = "s" ] && [ "${n}" -le 20 ] 2>/dev/null; then
+        t=$(( n / 2 )); [ "${t}" -lt 1 ] && t=1
+        echo "${t}s"
+    else
+        echo "10s"
+    fi
+}
+if [ "${METRICS_ENABLED}" = "true" ] || [ "${HOST_METRICS}" = "true" ]; then
+    # The instance label on every metric. Neither the container nor Alloy knows
+    # the Home Assistant OS hostname, so the default is the container's; set
+    # metrics_instance to name the host.
+    INSTANCE=$(opt ".metrics_instance // \"$(hostname)\"")
     METRICS_REMOTE_WRITE_URL=$(opt '.metrics_remote_write_url // ""')
-    METRICS_INTERVAL=$(opt '.metrics_interval // "60s"')
-    METRICS_JOB=$(opt '.metrics_job // "homeassistant"')
     RW_USER=$(opt '.metrics_remote_write_user // ""')
     RW_PASSWORD=$(opt '.metrics_remote_write_password // ""')
     if [ -z "${METRICS_REMOTE_WRITE_URL}" ] || [ "${METRICS_REMOTE_WRITE_URL}" = "null" ]; then
-        echo "!! metrics_enabled is on but metrics_remote_write_url is empty - nowhere to send the metrics."
+        echo "!! metrics are on (metrics_enabled or host_metrics) but metrics_remote_write_url is empty - nowhere to send them."
         exit 1
     fi
-    # Split the URL into what prometheus.scrape wants: scheme, host:port, path.
-    scheme="${METRICS_URL%%://*}"
-    rest="${METRICS_URL#*://}"
-    hostport="${rest%%/*}"
-    path="/${rest#*/}"; [ "${path}" = "/${rest}" ] && path="/metrics"
-    case "${scheme}" in http|https) ;; *) echo "!! metrics_url must start with http:// or https://"; exit 1 ;; esac
-    # Alloy refuses a scrape_timeout above the interval, and `alloy validate`
-    # does not see that (it is a component build error, so the service would
-    # crash-loop). Timeout = half the interval, capped at Alloy's 10s default.
-    n="${METRICS_INTERVAL%[smh]}"; u="${METRICS_INTERVAL##*[0-9]}"
-    METRICS_TIMEOUT="10s"
-    if [ "${u}" = "s" ] && [ "${n}" -le 20 ] 2>/dev/null; then
-        t=$(( n / 2 )); [ "${t}" -lt 1 ] && t=1
-        METRICS_TIMEOUT="${t}s"
-    fi
-
-    auth=""
-    if [ -n "${METRICS_TOKEN}" ] && [ "${METRICS_TOKEN}" != "null" ]; then
-        # printf, not echo: a trailing newline would go out as "Bearer xxx\n".
-        (umask 077; printf '%s' "${METRICS_TOKEN}" > "${TOKEN_FILE}")
-        auth="  bearer_token_file = \"${TOKEN_FILE}\""
-    else
-        rm -f "${TOKEN_FILE}"
-    fi
     # Hosted Prometheus (Grafana Cloud and the like) wants basic auth on the
-    # remote_write. Password via a 0600 file, like the token, so it is not in
-    # the config. Rendered only when a user is set.
-    RW_PASSWORD_FILE="/data/remote_write.password"
+    # remote_write. Rendered only when a user is set.
     rw_auth=""
     if [ -n "${RW_USER}" ] && [ "${RW_USER}" != "null" ]; then
         (umask 077; printf '%s' "${RW_PASSWORD}" > "${RW_PASSWORD_FILE}")
@@ -234,15 +229,52 @@ if [ "${METRICS_ENABLED}" = "true" ]; then
     else
         rm -f "${RW_PASSWORD_FILE}"
     fi
-    echo " metrics: ${scheme}://${hostport}${path} every ${METRICS_INTERVAL} as job ${METRICS_JOB} -> ${METRICS_REMOTE_WRITE_URL} (token: $([ -n "${auth}" ] && echo set || echo none); remote_write auth: $([ -n "${rw_auth}" ] && echo basic || echo none))"
+    echo " remote_write: ${METRICS_REMOTE_WRITE_URL} (auth: $([ -n "${rw_auth}" ] && echo basic || echo none))"
+    cat >> "${CONFIG_FILE}" <<EOF
 
+// --- metrics go here ---
+prometheus.remote_write "metrics" {
+  endpoint {
+    url = "${METRICS_REMOTE_WRITE_URL}"
+${rw_auth}
+  }
+}
+EOF
+else
+    rm -f "${RW_PASSWORD_FILE}"
+fi
+
+# ── Home Assistant metrics (metrics_enabled) ────────────────────────────────
+# Scrapes an OpenMetrics endpoint - by default Home Assistant's own
+# /api/prometheus, which needs `prometheus:` in configuration.yaml.
+if [ "${METRICS_ENABLED}" = "true" ]; then
+    METRICS_URL=$(opt '.metrics_url // "http://homeassistant:8123/api/prometheus"')
+    METRICS_TOKEN=$(opt '.metrics_token // ""')
+    METRICS_INTERVAL=$(opt '.metrics_interval // "60s"')
+    METRICS_JOB=$(opt '.metrics_job // "homeassistant"')
+    # Split the URL into what prometheus.scrape wants: scheme, host:port, path.
+    scheme="${METRICS_URL%%://*}"
+    rest="${METRICS_URL#*://}"
+    hostport="${rest%%/*}"
+    path="/${rest#*/}"; [ "${path}" = "/${rest}" ] && path="/metrics"
+    case "${scheme}" in http|https) ;; *) echo "!! metrics_url must start with http:// or https://"; exit 1 ;; esac
+    METRICS_TIMEOUT=$(timeout_for "${METRICS_INTERVAL}")
+    auth=""
+    if [ -n "${METRICS_TOKEN}" ] && [ "${METRICS_TOKEN}" != "null" ]; then
+        # printf, not echo: a trailing newline would go out as "Bearer xxx\n".
+        (umask 077; printf '%s' "${METRICS_TOKEN}" > "${TOKEN_FILE}")
+        auth="  bearer_token_file = \"${TOKEN_FILE}\""
+    else
+        rm -f "${TOKEN_FILE}"
+    fi
+    echo " metrics: ${scheme}://${hostport}${path} every ${METRICS_INTERVAL} as job ${METRICS_JOB} (token: $([ -n "${auth}" ] && echo set || echo none))"
     cat >> "${CONFIG_FILE}" <<EOF
 
 // --- Home Assistant metrics (metrics_enabled) ---
 prometheus.scrape "metrics" {
   targets = [{
     __address__ = "${hostport}",
-    instance    = "$(hostname)",
+    instance    = "${INSTANCE}",
   }]
   scheme          = "${scheme}"
   metrics_path    = "${path}"
@@ -252,16 +284,56 @@ prometheus.scrape "metrics" {
 ${auth}
   forward_to = [prometheus.remote_write.metrics.receiver]
 }
-
-prometheus.remote_write "metrics" {
-  endpoint {
-    url = "${METRICS_REMOTE_WRITE_URL}"
-${rw_auth}
-  }
-}
 EOF
 else
-    rm -f "${TOKEN_FILE}" /data/remote_write.password
+    rm -f "${TOKEN_FILE}"
+fi
+
+# ── Host metrics (alloy-host variant only) ──────────────────────────────────
+# What prometheus.exporter.unix can read from inside a container without host
+# privileges: /proc/stat, meminfo, loadavg, diskstats, uptime, pressure and
+# vmstat are kernel-global, and so are /sys/class/hwmon and thermal.
+# Deliberately absent: netdev (would report this container's veth, not the
+# host's NICs - a wrong number is worse than none), os (would say Debian, the
+# image, not HA OS), systemd (needs the host's D-Bus). The filesystem
+# collector sees only the mounts this add-on has, so it reports the data
+# partition, not every host disk.
+if [ "${HOST_METRICS}" = "true" ]; then
+    HOST_JOB=$(opt '.host_metrics_job // "node"')
+    HOST_INTERVAL=$(opt '.host_metrics_interval // "30s"')
+    echo " host metrics: every ${HOST_INTERVAL} as job ${HOST_JOB}"
+    cat >> "${CONFIG_FILE}" <<EOF
+
+// --- Host metrics (alloy-host) ---
+prometheus.exporter.unix "host" {
+  set_collectors = ["cpu", "meminfo", "loadavg", "diskstats", "filesystem", "hwmon", "thermal_zone", "uptime", "pressure", "vmstat"]
+  filesystem {
+    fs_types_exclude = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+  }
+}
+
+// The exporter's targets carry job="integrations/unix" and instance=<container
+// id>, and a target's own labels win over job_name. Set both explicitly.
+discovery.relabel "host" {
+  targets = prometheus.exporter.unix.host.targets
+  rule {
+    target_label = "job"
+    replacement  = "${HOST_JOB}"
+  }
+  rule {
+    target_label = "instance"
+    replacement  = "${INSTANCE}"
+  }
+}
+
+prometheus.scrape "host" {
+  targets         = discovery.relabel.host.output
+  job_name        = "${HOST_JOB}"
+  scrape_interval = "${HOST_INTERVAL}"
+  scrape_timeout  = "$(timeout_for "${HOST_INTERVAL}")"
+  forward_to      = [prometheus.remote_write.metrics.receiver]
+}
+EOF
 fi
 
 if [ -n "${ADDITIONAL_CONFIG}" ] && [ "${ADDITIONAL_CONFIG}" != "null" ]; then
@@ -272,7 +344,10 @@ echo "Alloy config generated at ${CONFIG_FILE}"
 
 # Fail fast, with the parser's message, rather than let the service crash-loop
 # on a bad additional_config where nobody is watching. s6 stops the container
-# when this oneshot exits non-zero, and the add-on log says why.
+# when this oneshot exits non-zero, and the add-on log says why. This is
+# PARSE-level: a config that parses but cannot build (a scrape_timeout above
+# its interval, say) passes here and fails at start - the health check is
+# the net for that layer.
 if ! /usr/bin/alloy validate "${CONFIG_FILE}"; then
     echo "!! the generated Alloy config is invalid - see above. Check loki_url and additional_config."
     exit 1

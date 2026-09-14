@@ -5,7 +5,7 @@ name: Grafana Alloy
 # bumped for add-on-only changes, because Home Assistant offers an update only
 # when this string changes. Renovate writes the plain Alloy release here (rev
 # back to 0, implicitly) and into the Dockerfile's ALLOY_VERSION together.
-version: "1.13.2.2"
+version: "1.13.2.3"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
@@ -60,6 +60,7 @@ schema:
   metrics_remote_write_url: "url?"
   metrics_remote_write_user: "str?"
   metrics_remote_write_password: "password?"
+  metrics_instance: "str?"
   metrics_interval: "str?"
   metrics_job: "str?"
   additional_config: "str?"
