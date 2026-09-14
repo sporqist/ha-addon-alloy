@@ -172,7 +172,12 @@ cleanup() { docker rm -f "$NAME" e2e-prom >/dev/null 2>&1 || true; kill "$STUB_P
 trap cleanup EXIT
 for _ in $(seq 1 30); do curl -sf "http://localhost:$PROM_PORT/-/ready" >/dev/null && break; sleep 2; done
 curl -sf "http://localhost:$PROM_PORT/-/ready" >/dev/null || fail "Prometheus never became ready"
-[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$STUB_PORT/metrics")" = "401" ] || fail "the metrics stub is not answering (expected 401 without a token)"
+# The stub is a Python process starting in the background; give it a moment.
+for _ in $(seq 1 15); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$STUB_PORT/metrics")" = "401" ] && break
+  sleep 1
+done
+[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$STUB_PORT/metrics")" = "401" ] || { cat /tmp/stub.log; fail "the metrics stub is not answering (expected 401 without a token)"; }
 
 say "1. AppArmor on the runner"
 if [ -n "$LOCAL" ]; then
