@@ -5,6 +5,8 @@
 
 Ship Home Assistant OS systemd journal logs to Grafana Loki using Grafana Alloy.
 
-Replaces the deprecated Promtail add-on which fails on HAOS 11+ due to systemd 252+ compact journal format incompatibility.
+Replaces the abandoned Promtail add-on, which fails on HAOS 11+ due to the systemd 252+ compact journal format.
+
+Fork of ecohash-co/ha-addon-alloy: AppArmor on, images pre-built by CI and verified against Grafana's checksums, dependencies tracked by Renovate.
 
 For full documentation, see the **Documentation** tab after installing.

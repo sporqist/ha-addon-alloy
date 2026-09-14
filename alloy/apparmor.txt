@@ -1,0 +1,97 @@
+#include <tunables/global>
+
+# Profile for the Grafana Alloy add-on. Built from the Home Assistant template
+# (developers.home-assistant.io/docs/apps/presentation#apparmor) plus what the
+# two s6 scripts and the Alloy binary actually touch.
+#
+# The alloy sub-profile carries the `complain` flag for its first release so
+# that ungranted access is LOGGED, not denied - the documented way to finish a
+# profile: run it, read `journalctl _TRANSPORT="audit" -g 'apparmor="ALLOWED"'`
+# on the host, add what is missing, then remove `complain`.
+profile alloy flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Capabilities
+  file,
+  signal (send) set=(kill,term,int,hup,cont),
+
+  # S6-Overlay (v3 layout: s6-rc.d under /etc/s6-overlay)
+  /init ix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/s6-overlay/** rix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/{,**} rwk,
+  /dev/tty rw,
+
+  # Bashio
+  /usr/lib/bashio/** ix,
+  /tmp/** rwk,
+
+  # The HEALTHCHECK runs curl under this profile against the local Alloy port
+  network inet stream,
+  network inet6 stream,
+
+  # Access to options.json and the Alloy storage path
+  /data/** rw,
+
+  # init-alloy writes the generated config here
+  /etc/alloy/ rw,
+  /etc/alloy/** rw,
+
+  # init-alloy checks which journal path exists before rendering the config
+  /var/log/journal/ r,
+  /var/log/journal/** r,
+  /run/log/journal/ r,
+  /run/log/journal/** r,
+
+  # Start new profile for the Alloy binary
+  /usr/bin/alloy cx -> alloy_bin,
+
+  profile alloy_bin flags=(attach_disconnected,mediate_deleted,complain) {
+    #include <abstractions/base>
+    #include <abstractions/nameservice>
+    #include <abstractions/ssl_certs>
+
+    # Receive signals from S6-Overlay
+    signal (receive) peer=*_alloy,
+
+    # Push to Loki, serve /-/ready to the Supervisor's watchdog
+    network inet stream,
+    network inet6 stream,
+    network inet dgram,
+    network inet6 dgram,
+
+    # The binary and the libraries it dlopens (libsystemd for the journal)
+    /usr/bin/alloy mr,
+    /usr/lib/** mr,
+    /lib/** mr,
+
+    # Generated config, read only
+    /etc/alloy/config.alloy r,
+
+    # Storage path (WAL, positions)
+    /data/** rwk,
+
+    # The host journal, mapped read-only by journald: true
+    /var/log/journal/ r,
+    /var/log/journal/** r,
+    /run/log/journal/ r,
+    /run/log/journal/** r,
+
+    # What the Go runtime and the journal reader look at
+    /etc/machine-id r,
+    /proc/sys/net/core/somaxconn r,
+    /proc/sys/kernel/hostname r,
+    /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+    /sys/fs/cgroup/** r,
+    owner /proc/*/** r,
+    /dev/null rw,
+    /tmp/** rwk,
+  }
+}

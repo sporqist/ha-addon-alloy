@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Track what this add-on bundles: Grafana Alloy, the Home Assistant base image, and the GitHub Actions. Every bump is a PR; nothing automerges - the operator decides what runs inside Home Assistant.",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "dependencyDashboard": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "ALLOY_VERSION in the Dockerfile follows grafana/alloy releases",
+      "managerFilePatterns": ["/^alloy/Dockerfile$/"],
+      "matchStrings": ["ARG ALLOY_VERSION=\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "grafana/alloy",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The add-on version IS the Alloy version, so config.yaml moves with the same release",
+      "managerFilePatterns": ["/^alloy/config\\.yaml$/"],
+      "matchStrings": ["^version: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "grafana/alloy",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One PR per Alloy release, touching Dockerfile and config.yaml together",
+      "matchDepNames": ["grafana/alloy"],
+      "groupName": "Grafana Alloy",
+      "commitMessageTopic": "Grafana Alloy"
+    },
+    {
+      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/home-assistant/base-debian"],
+      "versioning": "regex:^trixie-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "description": "Pin the builder actions to their release tags, not a floating branch",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["home-assistant/builder"],
+      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{2})\\.(?<patch>\\d+)$"
+    }
+  ]
+}

@@ -17,7 +17,7 @@ This add-on replaces the deprecated Promtail add-on, which is incompatible with 
 
 ## Labels
 
-All journal entries are shipped to Loki with these labels:
+All journal entries are shipped to Loki with these labels. Note that `hostname` is the HA OS hostname, which is `homeassistant` on every default install - if you ship more than one instance to the same Loki, distinguish them on the receiving side (for example with a `loki.source.api` receiver per instance in a central Alloy) or set distinct hostnames.
 
 | Label | Source |
 |-------|--------|
@@ -31,7 +31,7 @@ All journal entries are shipped to Loki with these labels:
 
 ## Debug UI
 
-The Alloy debug UI is available at `http://<haos-ip>:12345` when the add-on is running. Use it to inspect component health, view the pipeline DAG, and troubleshoot issues.
+Alloy's debug UI (component health, pipeline graph) listens on port 12345 inside the add-on but is **not published on the host by default**, because it has no authentication. To use it temporarily, set a host port for `12345/tcp` in the add-on's Network settings, and clear it again afterwards. The Supervisor's watchdog reaches `/-/ready` on the add-on network regardless of the mapping.
 
 ## Advanced: Additional Config
 
@@ -48,8 +48,11 @@ Note: This is injected as-is into the config file. Syntax errors will prevent Al
 
 - **No logs in Loki**: Check that `loki_url` is reachable from HAOS. Try `ping <loki-host>` from the SSH add-on.
 - **Add-on crashes on start**: Check the add-on log for Alloy config errors. Set `log_level: debug` for verbose output.
-- **"timestamp too old" in Loki**: Normal on first start. Alloy reads the full journal history; Loki rejects entries outside its retention window. Resolves in 1-2 minutes.
+- **"timestamp too old" in Loki**: Normal on first start. Alloy reads the full journal history; Loki rejects entries older than its `reject_old_samples_max_age`. Resolves in 1-2 minutes.
+- **AppArmor**: the Alloy process runs under a custom profile. Denials show on the HA OS host as `journalctl _TRANSPORT="audit"` lines with `apparmor="DENIED"` (or `"ALLOWED"` while the profile is in complain mode). Report them with the line quoted; they are the input for tightening the profile.
 
 ## Support
 
-Report issues at: https://github.com/ecohash-co/ha-addon-alloy/issues
+Report issues at: https://github.com/sporqist/ha-addon-alloy/issues
+
+This is a fork of [ecohash-co/ha-addon-alloy](https://github.com/ecohash-co/ha-addon-alloy) (MIT) with AppArmor enabled, pre-built CI images, checksum-verified downloads and automated dependency tracking. See `CHANGELOG.md`.

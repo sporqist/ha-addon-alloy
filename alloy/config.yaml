@@ -1,27 +1,33 @@
+# https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Grafana Alloy
-version: "1.0.0"
+# The add-on version IS the bundled Alloy version. Renovate bumps this and the
+# Dockerfile's ALLOY_VERSION together; the published image tag must match.
+version: "1.13.2"
 slug: alloy
 description: >-
-  Ship Home Assistant logs to Loki using Grafana Alloy.
-  Replacement for the deprecated Promtail add-on.
-  Reads systemd journal and forwards to a remote Loki instance.
-url: https://github.com/ecohash-co/ha-addon-alloy
-codeowners:
-  - "@ecohash-co"
+  Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
+  Replacement for the abandoned Promtail add-on.
+url: https://github.com/sporqist/ha-addon-alloy
 arch:
   - aarch64
   - amd64
+# Pre-built by CI (home-assistant/builder actions) and pulled, never compiled
+# on the Home Assistant host.
+image: ghcr.io/sporqist/ha-addon-alloy
 init: false
 startup: services
-boot: auto
+# The one privilege this add-on needs: the host journal, read-only.
 journald: true
-map:
-  - addon_config:rw
+# Alloy's debug UI is unauthenticated. It is NOT published on the host by
+# default; set a host port in the add-on's Network settings only while
+# debugging. Health is checked by the image's HEALTHCHECK against /-/ready
+# inside the container, so the mapping is not needed for that.
 ports:
-  12345/tcp: 12345
+  12345/tcp: null
 ports_description:
-  12345/tcp: "Alloy debug UI"
-watchdog: "http://[HOST]:[PORT:12345]/-/ready"
+  12345/tcp: "Alloy debug UI (unauthenticated - leave unmapped unless debugging)"
+# AppArmor is on by default; the custom profile is apparmor.txt next to this
+# file. Upstream shipped `apparmor: false`, which is the point of this fork.
 options:
   loki_url: "http://localhost:3100/loki/api/v1/push"
   log_level: info
@@ -30,4 +36,3 @@ schema:
   log_level: "list(debug|info|warn|error)"
   additional_config: "str?"
 stage: experimental
-apparmor: false

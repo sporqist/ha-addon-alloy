@@ -1,0 +1,47 @@
+# Home Assistant's own add-on linter: config.yaml schema, apparmor.txt
+# presence, Dockerfile conventions. Runs on every change and nightly, so a
+# Supervisor-side schema change surfaces here before it surfaces on a host.
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 5 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  find:
+    name: Find apps
+    runs-on: ubuntu-latest
+    outputs:
+      addons: ${{ steps.addons.outputs.addons_list }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Find app directories
+        id: addons
+        uses: home-assistant/actions/helpers/find-addons@master
+
+  lint:
+    name: Lint app ${{ matrix.path }}
+    runs-on: ubuntu-latest
+    needs: find
+    strategy:
+      matrix:
+        path: ${{ fromJson(needs.find.outputs.addons) }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Run Home Assistant App Lint
+        uses: frenck/action-addon-linter@v2.21
+        with:
+          path: "./${{ matrix.path }}"
