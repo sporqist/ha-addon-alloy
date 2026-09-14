@@ -20,6 +20,22 @@ The defaults ship the journal **as journald recorded it**: job `systemd-journal`
 
 `hostname` is the HA OS hostname, which is `homeassistant` on every default install. If you ship more than one instance to the same Loki, set a distinct `job` per instance (or distinct hostnames).
 
+### Metrics (optional)
+
+Off by default. When on, the add-on scrapes one OpenMetrics endpoint - by default Home Assistant's own `/api/prometheus` - and remote-writes it to a Prometheus-compatible endpoint. Nothing else changes.
+
+| Option | Default | What it does |
+|---|---|---|
+| `metrics_enabled` | `false` | Turn the scrape on |
+| `metrics_url` | `http://homeassistant:8123/api/prometheus` | What to scrape. The default is Home Assistant Core as seen from the add-on network; it only answers if `prometheus:` is in your `configuration.yaml` ([docs](https://www.home-assistant.io/integrations/prometheus/)) |
+| `metrics_token` | *(empty)* | Bearer token for the scrape. For Home Assistant: a **long-lived access token of a dedicated user** (see below). Stored in a 0600 file inside the add-on, never in the generated config |
+| `metrics_remote_write_url` | *(required when enabled)* | Where to send the metrics, e.g. `http://192.168.1.45:9090/api/v1/write` (Prometheus needs `--web.enable-remote-write-receiver`), or a hosted endpoint |
+| `metrics_remote_write_user` / `metrics_remote_write_password` | *(empty)* | Basic auth for the remote_write, as hosted Prometheus services (Grafana Cloud and others) require |
+| `metrics_interval` | `60s` | Scrape interval. The timeout is derived (half the interval, at most 10s) |
+| `metrics_job` | `homeassistant` | The `job` label on the metrics |
+
+**A token for Home Assistant, least privilege:** create a *user* (Settings → People → Users tab), not a person - a person would become an entity the scrape exports. The `/api/prometheus` endpoint only needs to read, so put the user in the read-only group; the UI does not offer it, but from an admin session the websocket command `{"type":"config/auth/update","user_id":"<id>","group_ids":["system-read-only"],"local_only":true}` does. Then log in as that user once and create a long-lived access token under Profile → Security. That token can read every entity and control none.
+
 ## Debug UI
 
 Alloy's debug UI (component health, pipeline graph) listens on port 12345 inside the add-on but is **not published on the host by default**, because it has no authentication. To use it temporarily, set a host port for `12345/tcp` in the add-on's Network settings, and clear it again afterwards. The Supervisor's watchdog reaches `/-/ready` on the add-on network regardless of the mapping.

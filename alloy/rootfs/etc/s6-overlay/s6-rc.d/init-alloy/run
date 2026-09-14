@@ -22,6 +22,7 @@ JOB=$(opt '.job // "systemd-journal"')
 STREAM_LABELS=$(opt '(.stream_labels // ["hostname","unit","level"]) | join(" ")')
 STRUCTURED_METADATA=$(opt '.structured_metadata // false')
 LEVEL_FROM_MESSAGE=$(opt '.level_from_message // false')
+METRICS_ENABLED=$(opt '.metrics_enabled // false')
 ADDITIONAL_CONFIG=$(opt '.additional_config // ""')
 
 has_label() { case " ${STREAM_LABELS} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
@@ -175,6 +176,93 @@ loki.write "loki" {
   }
 }
 EOF
+
+# ── Home Assistant metrics (opt-in) ─────────────────────────────────────────
+# Scrapes an OpenMetrics endpoint - by default Home Assistant's own
+# /api/prometheus, which needs `prometheus:` in configuration.yaml - and
+# remote-writes it. Off: nothing below is read and the config above is all
+# there is. The token never enters the config file: it is written to a 0600
+# file and referenced, so the config stays readable without the secret.
+TOKEN_FILE="/data/metrics.token"
+if [ "${METRICS_ENABLED}" = "true" ]; then
+    METRICS_URL=$(opt '.metrics_url // "http://homeassistant:8123/api/prometheus"')
+    METRICS_TOKEN=$(opt '.metrics_token // ""')
+    METRICS_REMOTE_WRITE_URL=$(opt '.metrics_remote_write_url // ""')
+    METRICS_INTERVAL=$(opt '.metrics_interval // "60s"')
+    METRICS_JOB=$(opt '.metrics_job // "homeassistant"')
+    RW_USER=$(opt '.metrics_remote_write_user // ""')
+    RW_PASSWORD=$(opt '.metrics_remote_write_password // ""')
+    if [ -z "${METRICS_REMOTE_WRITE_URL}" ] || [ "${METRICS_REMOTE_WRITE_URL}" = "null" ]; then
+        echo "!! metrics_enabled is on but metrics_remote_write_url is empty - nowhere to send the metrics."
+        exit 1
+    fi
+    # Split the URL into what prometheus.scrape wants: scheme, host:port, path.
+    scheme="${METRICS_URL%%://*}"
+    rest="${METRICS_URL#*://}"
+    hostport="${rest%%/*}"
+    path="/${rest#*/}"; [ "${path}" = "/${rest}" ] && path="/metrics"
+    case "${scheme}" in http|https) ;; *) echo "!! metrics_url must start with http:// or https://"; exit 1 ;; esac
+    # Alloy refuses a scrape_timeout above the interval, and `alloy validate`
+    # does not see that (it is a component build error, so the service would
+    # crash-loop). Timeout = half the interval, capped at Alloy's 10s default.
+    n="${METRICS_INTERVAL%[smh]}"; u="${METRICS_INTERVAL##*[0-9]}"
+    METRICS_TIMEOUT="10s"
+    if [ "${u}" = "s" ] && [ "${n}" -le 20 ] 2>/dev/null; then
+        t=$(( n / 2 )); [ "${t}" -lt 1 ] && t=1
+        METRICS_TIMEOUT="${t}s"
+    fi
+
+    auth=""
+    if [ -n "${METRICS_TOKEN}" ] && [ "${METRICS_TOKEN}" != "null" ]; then
+        # printf, not echo: a trailing newline would go out as "Bearer xxx\n".
+        (umask 077; printf '%s' "${METRICS_TOKEN}" > "${TOKEN_FILE}")
+        auth="  bearer_token_file = \"${TOKEN_FILE}\""
+    else
+        rm -f "${TOKEN_FILE}"
+    fi
+    # Hosted Prometheus (Grafana Cloud and the like) wants basic auth on the
+    # remote_write. Password via a 0600 file, like the token, so it is not in
+    # the config. Rendered only when a user is set.
+    RW_PASSWORD_FILE="/data/remote_write.password"
+    rw_auth=""
+    if [ -n "${RW_USER}" ] && [ "${RW_USER}" != "null" ]; then
+        (umask 077; printf '%s' "${RW_PASSWORD}" > "${RW_PASSWORD_FILE}")
+        rw_auth="    basic_auth {
+      username      = \"${RW_USER}\"
+      password_file = \"${RW_PASSWORD_FILE}\"
+    }"
+    else
+        rm -f "${RW_PASSWORD_FILE}"
+    fi
+    echo " metrics: ${scheme}://${hostport}${path} every ${METRICS_INTERVAL} as job ${METRICS_JOB} -> ${METRICS_REMOTE_WRITE_URL} (token: $([ -n "${auth}" ] && echo set || echo none); remote_write auth: $([ -n "${rw_auth}" ] && echo basic || echo none))"
+
+    cat >> "${CONFIG_FILE}" <<EOF
+
+// --- Home Assistant metrics (metrics_enabled) ---
+prometheus.scrape "metrics" {
+  targets = [{
+    __address__ = "${hostport}",
+    instance    = "$(hostname)",
+  }]
+  scheme          = "${scheme}"
+  metrics_path    = "${path}"
+  job_name        = "${METRICS_JOB}"
+  scrape_interval = "${METRICS_INTERVAL}"
+  scrape_timeout  = "${METRICS_TIMEOUT}"
+${auth}
+  forward_to = [prometheus.remote_write.metrics.receiver]
+}
+
+prometheus.remote_write "metrics" {
+  endpoint {
+    url = "${METRICS_REMOTE_WRITE_URL}"
+${rw_auth}
+  }
+}
+EOF
+else
+    rm -f "${TOKEN_FILE}" /data/remote_write.password
+fi
 
 if [ -n "${ADDITIONAL_CONFIG}" ] && [ "${ADDITIONAL_CONFIG}" != "null" ]; then
     printf '\n// --- Additional user config ---\n%s\n' "${ADDITIONAL_CONFIG}" >> "${CONFIG_FILE}"
