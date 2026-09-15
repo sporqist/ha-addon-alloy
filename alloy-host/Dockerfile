@@ -6,7 +6,7 @@
 #
 # The cost is one Renovate cycle of lag: a base change reaches alloy-host when
 # Renovate's next pass opens and merges the digest bump.
-ARG BASE_IMAGE=ghcr.io/sporqist/ha-addon-alloy:1.13.2.3@sha256:a0846111dab6b53f4439747b68c7ad9931688416d78c4b1b4f7fd3afa277a11f
+ARG BASE_IMAGE=ghcr.io/sporqist/ha-addon-alloy:1.19.2.1@sha256:04e0557e7b67448e9bd9f66099b98f454a227364ca78aebb60d47a7a5db13e47
 FROM ${BASE_IMAGE}
 
 # The generator reads this and adds prometheus.exporter.unix for the host.
