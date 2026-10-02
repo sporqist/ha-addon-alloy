@@ -246,14 +246,27 @@ have=$(docker run --rm --entrypoint /usr/bin/alloy "$IMAGE" --version | sed -n '
 echo "config.yaml alloy version=$want  image alloy=$have"
 [ -n "$want" ] && [ "$want" = "$have" ] || fail "version mismatch: the published tag would lie about what is inside"
 if [ "$SLUG" != "alloy" ]; then
-  # The variant's own version is <base tag>.<rev>: its first four components
-  # must be the base tag pinned in its Dockerfile. Renovate bumps both in one
-  # PR; this catches a hand edit that moves one without the other.
+  # The variant's own version is the base tag it is built on, optionally with
+  # a further component for a host-only revision. Renovate writes the plain
+  # base tag into both files in one PR; this catches a hand edit that moves
+  # one without the other.
   pinned=$(sed -n 's/^ARG BASE_IMAGE=ghcr.io\/sporqist\/ha-addon-alloy:\([0-9.]*\)@.*/\1/p' "$APP/Dockerfile")
-  own=$(sed -n 's/^version: "\(.*\)"$/\1/p' "$APP/config.yaml" | cut -d. -f1-4)
+  own=$(sed -n 's/^version: "\(.*\)"$/\1/p' "$APP/config.yaml")
   echo "$APP version tracks base tag: pinned=$pinned own=$own"
-  [ -n "$pinned" ] && [ "$pinned" = "$own" ] || fail "$APP/config.yaml version does not track the base tag pinned in its Dockerfile"
+  [ -n "$pinned" ] || fail "no base image tag pinned in $APP/Dockerfile"
+  case "$own" in
+    "$pinned" | "$pinned".*) : ;;
+    *) fail "$APP/config.yaml version $own does not start with the base tag pinned in its Dockerfile ($pinned)" ;;
+  esac
 fi
+
+# And the changelog shows that version. Home Assistant slices CHANGELOG.md for
+# the section of the version it installs and silently shows the whole file when
+# it cannot find it - which is what a dependency bump that moves config.yaml
+# alone leaves behind. Renovate writes the top section with every Alloy bump;
+# this is the net under that.
+python3 .github/scripts/changelog-check.py "$APP" \
+  || fail "Home Assistant would not show this version's release notes - see above"
 
 say "2. Default options: faithful and minimal"
 start_addon "{\"loki_url\":\"$LOKI_PUSH\",\"log_level\":\"info\"}"

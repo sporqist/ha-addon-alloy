@@ -4,7 +4,10 @@ name: Alloy
 # Alloy version and the published image tag must carry them; the fourth is
 # bumped for add-on-only changes, because Home Assistant offers an update only
 # when this string changes. Renovate writes the plain Alloy release here (rev
-# back to 0, implicitly) and into the Dockerfile's ALLOY_VERSION together.
+# back to 0, implicitly), into the Dockerfile's ALLOY_VERSION and into
+# CHANGELOG.md's top section, all in one pull request. Home Assistant shows
+# that section as the release notes, so a version without one is a bug the
+# gate fails on.
 version: "1.20.1"
 slug: alloy
 description: >-

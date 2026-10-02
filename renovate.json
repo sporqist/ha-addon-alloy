@@ -51,6 +51,35 @@
       "depNameTemplate": "ghcr.io/sporqist/ha-addon-alloy",
       "datasourceTemplate": "docker",
       "versioningTemplate": "loose"
+    },
+    {
+      "customType": "regex",
+      "description": "The top section of the changelog IS the Alloy release the add-on bundles. autoReplaceStringTemplate rewrites the marked heading to the new version AND re-emits the old one as its own heading below, so every shipped version keeps a section: Home Assistant matches ^#* <version> to show the right notes, and finds both the version it installs and the one it replaces.",
+      "managerFilePatterns": [
+        "/^alloy/CHANGELOG\\.md$/"
+      ],
+      "matchStrings": [
+        "<!-- renovate:alloy-release -->\n## (?<currentValue>[^\n]+)\n"
+      ],
+      "autoReplaceStringTemplate": "<!-- renovate:alloy-release -->\n## {{{newValue}}}\n\nGrafana Alloy {{{newValue}}}; the add-on itself is unchanged.\nUpstream release notes: https://github.com/grafana/alloy/releases/tag/v{{{newValue}}}\n\n## {{{currentValue}}}\n",
+      "depNameTemplate": "grafana/alloy",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "versioningTemplate": "loose"
+    },
+    {
+      "customType": "regex",
+      "description": "Same for the host variant, whose version is the base add-on it is built on.",
+      "managerFilePatterns": [
+        "/^alloy-host/CHANGELOG\\.md$/"
+      ],
+      "matchStrings": [
+        "<!-- renovate:base-image -->\n## (?<currentValue>[^\n]+)\n"
+      ],
+      "autoReplaceStringTemplate": "<!-- renovate:base-image -->\n## {{{newValue}}}\n\nBuilt on the Alloy add-on {{{newValue}}}; nothing host-specific changed.\nSee `../alloy/CHANGELOG.md` for what that release carries.\n\n## {{{currentValue}}}\n",
+      "depNameTemplate": "ghcr.io/sporqist/ha-addon-alloy",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "loose"
     }
   ],
   "packageRules": [
@@ -127,6 +156,13 @@
       "versioning": "loose",
       "pinDigests": true,
       "automerge": true
+    },
+    {
+      "description": "A changelog heading is text, not an image reference: nothing to pin a digest into. Last rule, so it overrides pinDigests for these files only.",
+      "matchFileNames": [
+        "**/CHANGELOG.md"
+      ],
+      "pinDigests": false
     }
   ]
 }

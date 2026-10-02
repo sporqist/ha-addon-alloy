@@ -3,7 +3,29 @@
 The add-on version is `<Grafana Alloy version>.<add-on revision>`. Alloy's own
 release notes: https://github.com/grafana/alloy/releases
 
-## 1.19.2.1 - 2026-09-15
+Every heading is the bare version, nothing else on the line. Home Assistant
+shows the section for the version it is about to install by matching
+`^#* <version>` against this file and falls back to showing the whole file
+when that fails (core, `homeassistant/components/hassio/update.py`).
+
+The top section is written by Renovate when it bumps Grafana Alloy: it carries
+the release the add-on bundles now, and pushes the previous one down as its own
+section. Add-on changes of our own get a section with a fourth component.
+
+<!-- renovate:alloy-release -->
+## 1.20.1
+
+Grafana Alloy 1.20.1; the add-on itself is unchanged.
+Upstream release notes: https://github.com/grafana/alloy/releases/tag/v1.20.1
+
+## 1.20.0
+
+Grafana Alloy 1.20.0; the add-on itself is unchanged.
+Upstream release notes: https://github.com/grafana/alloy/releases/tag/v1.20.0
+
+## 1.19.2.1
+
+_2026-09-15_
 
 ### Changed
 - The add-on is called **Alloy** - the ecosystem's convention (the Loki,
@@ -16,7 +38,15 @@ release notes: https://github.com/grafana/alloy/releases
 - Grafana Alloy 1.19.2 (the first release taken through the gate unattended:
   Renovate #2, both add-ons, zero AppArmor denials).
 
-## 1.13.2.7 - 2026-09-14
+## 1.19.2
+
+Grafana Alloy 1.19.2; the add-on itself is unchanged. First release that
+Renovate took through the gate and merged unattended.
+Upstream release notes: https://github.com/grafana/alloy/releases/tag/v1.19.2
+
+## 1.13.2.7
+
+_2026-09-14_
 
 ### Fixed
 - The `job` label is now stamped in the processing pipeline, not on the
@@ -27,7 +57,9 @@ release notes: https://github.com/grafana/alloy/releases
   1.13.2; the fix is what lets 1.19.x updates through, and it is permanent:
   a label set by a stage is immune to source-side overrides in any version.
 
-## 1.13.2.6 - 2026-09-14
+## 1.13.2.6
+
+_2026-09-14_
 
 ### Added
 - `raw_config` (off): expert mode. Additional Grafana Alloy configuration
@@ -37,7 +69,9 @@ release notes: https://github.com/grafana/alloy/releases
   Still validated before start; the gate ships a line through a user-written
   pipeline with its own label names.
 
-## 1.13.2.5 - 2026-09-14
+## 1.13.2.5
+
+_2026-09-14_
 
 ### Changed
 - Every optional option now appears in the configuration form: the form
@@ -50,7 +84,9 @@ release notes: https://github.com/grafana/alloy/releases
 - Documentation names the products as "Grafana Alloy" and "Grafana Loki"
   and carries the trademark disclaimer; a generic icon and logo.
 
-## 1.13.2.4 - 2026-09-14
+## 1.13.2.4
+
+_2026-09-14_
 
 ### Fixed
 - `level_from_message` read the level from the whole journal entry, not the
@@ -76,7 +112,9 @@ release notes: https://github.com/grafana/alloy/releases
   `INFO:` becomes `info`, and a level token in a non-message field is
   ignored.
 
-## 1.13.2.3 - 2026-09-14
+## 1.13.2.3
+
+_2026-09-14_
 
 ### Added
 - `metrics_instance`: the `instance` label on metrics (default: the
@@ -88,7 +126,9 @@ release notes: https://github.com/grafana/alloy/releases
 ### Fixed
 - The scrape timeout derivation is one function for every scrape.
 
-## 1.13.2.2 - 2026-09-14
+## 1.13.2.2
+
+_2026-09-14_
 
 ### Added
 - Optional metrics: `metrics_enabled` scrapes one OpenMetrics endpoint
@@ -101,7 +141,9 @@ release notes: https://github.com/grafana/alloy/releases
 - CI: a third gate run scrapes a stub that answers only to the exact token,
   through remote_write into a real Prometheus.
 
-## 1.13.2.1 - 2026-09-14
+## 1.13.2.1
+
+_2026-09-14_
 
 Faithful, minimal defaults; every transformation opt-in. Made for anyone's
 Loki, not one fleet's.
@@ -127,7 +169,9 @@ Loki, not one fleet's.
   options and a fully opinionated set - and asserts the exact label set and
   structured-metadata placement in Loki.
 
-## 1.13.2 - 2026-09-14
+## 1.13.2
+
+_2026-09-14_
 
 Fork of ecohash-co/ha-addon-alloy 1.0.0, hardened for unattended use.
 
@@ -155,7 +199,9 @@ Fork of ecohash-co/ha-addon-alloy 1.0.0, hardened for unattended use.
   the add-on `version` together), the base image tag, and the GitHub Actions.
 - Lint workflow using Home Assistant's add-on linter, nightly.
 
-## 1.0.0 - 2026-02-21 (upstream)
+## 1.0.0
+
+_2026-02-21 - upstream release by ecohash-co_
 
 ### Added
 - Initial release by ecohash-co
