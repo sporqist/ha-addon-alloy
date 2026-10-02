@@ -1,14 +1,44 @@
 # Changelog
 
-The add-on version is `<base add-on version>.<host revision>`; the base changelog is in `../alloy/CHANGELOG.md`.
+The add-on version is the version of the base add-on this one is built on;
+a host-only change adds a further component to it. The base changelog is in
+`../alloy/CHANGELOG.md` and carries everything this add-on inherits.
 
-## 1.13.2.3.6 - 2026-09-15
+Every heading is the bare version, nothing else on the line: Home Assistant
+matches `^#* <version>` against this file to show the section for the version
+it is about to install, and falls back to the whole file when that fails.
+The top section is written by Renovate when it moves this add-on onto a new
+base image.
+
+<!-- renovate:base-image -->
+## 1.20.1
+
+Built on the Alloy add-on 1.20.1; nothing host-specific changed.
+See `../alloy/CHANGELOG.md` for what that release carries.
+
+## 1.20.0
+
+Built on the Alloy add-on 1.20.0; nothing host-specific changed.
+See `../alloy/CHANGELOG.md` for what that release carries.
+
+## 1.19.2.1
+
+Built on the Alloy add-on 1.19.2.1 (Grafana Alloy 1.19.2, the add-on renamed to
+Alloy with its final artwork); nothing host-specific changed. The version scheme
+starts here: this add-on now carries the base add-on's version exactly, because
+Renovate writes the base image tag into it.
+
+## 1.13.2.3.6
+
+_2026-09-15_
 
 ### Changed
 - Named **Alloy (host metrics)**, with the base add-on's final artwork plus a
   "host metrics" subline on the logo. See the base changelog for why.
 
-## 1.13.2.3.5 - 2026-09-14
+## 1.13.2.3.5
+
+_2026-09-14_
 
 ### Fixed
 - AppArmor: the hwmon collector also lists the hwmon's parent device
@@ -18,7 +48,9 @@ The add-on version is `<base add-on version>.<host revision>`; the base changelo
   whose hwmon sat under such a device logged one denial per scrape and the
   hwmon collector failed (found by the gate on a runner with NVMe sensors).
 
-## 1.13.2.3.4 - 2026-09-14
+## 1.13.2.3.4
+
+_2026-09-14_
 
 ### Added
 - `raw_config` (off): expert mode. Additional Grafana Alloy configuration
@@ -28,7 +60,9 @@ The add-on version is `<base add-on version>.<host revision>`; the base changelo
   Still validated before start; the gate ships a line through a user-written
   pipeline with its own label names.
 
-## 1.13.2.3.3 - 2026-09-14
+## 1.13.2.3.3
+
+_2026-09-14_
 
 ### Changed
 - Every optional option now appears in the configuration form: the form
@@ -41,7 +75,9 @@ The add-on version is `<base add-on version>.<host revision>`; the base changelo
 - Documentation names the products as "Grafana Alloy" and "Grafana Loki"
   and carries the trademark disclaimer; a generic icon and logo.
 
-## 1.13.2.3.2 - 2026-09-14
+## 1.13.2.3.2
+
+_2026-09-14_
 
 ### Fixed
 - AppArmor: NVMe drives expose their temperature sensors as `hwmonN/`
@@ -49,7 +85,9 @@ The add-on version is `<base add-on version>.<host revision>`; the base changelo
   covers both layouts. Found by the test gate on a runner with NVMe
   sensors, before any host ran it.
 
-## 1.13.2.3.1 - 2026-09-14
+## 1.13.2.3.1
+
+_2026-09-14_
 
 ### Added
 - First release: the base add-on 1.13.2.3 plus host metrics via

@@ -5,10 +5,11 @@
 # prometheus.exporter.unix. Install this INSTEAD of the base, never alongside -
 # both would read the journal.
 name: Alloy (host metrics)
-# <base image tag>.<host revision>. The first four components are the base
-# image this is built FROM (which carries the Alloy version in its first
-# three); the fifth is bumped for host-only changes. Renovate writes the new
-# base tag here when it bumps the Dockerfile's FROM.
+# The tag of the base image this is built FROM, which carries the Alloy
+# version in its first three components. Renovate writes that tag here when it
+# bumps the Dockerfile's FROM, and the matching section into CHANGELOG.md. A
+# host-only change appends a further component (1.20.1 -> 1.20.1.1) and writes
+# its own changelog section; the gate checks both.
 version: "1.20.1"
 slug: alloy-host
 description: >-
