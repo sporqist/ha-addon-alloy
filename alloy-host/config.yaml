@@ -34,8 +34,8 @@ ports:
   12345/tcp: null
 ports_description:
   12345/tcp: "Alloy debug UI (unauthenticated - leave unmapped unless debugging)"
+# No loki_url default, as in the base: localhost in here is the add-on itself.
 options:
-  loki_url: "http://localhost:3100/loki/api/v1/push"
   log_level: info
   job: systemd-journal
   stream_labels:
@@ -48,6 +48,10 @@ options:
   # Optional keys listed with "" so the form shows them (it hides optional
   # keys absent from options). "" is valid for str/password, not for url -
   # hence the URLs are typed str and checked by the generator.
+  loki_username: ""
+  loki_password: ""
+  loki_bearer_token: ""
+  loki_tenant_id: ""
   metrics_url: ""
   metrics_token: ""
   metrics_remote_write_url: ""
@@ -69,6 +73,10 @@ schema:
     - "list(hostname|unit|level|syslog_identifier|container_name|transport|priority)"
   structured_metadata: bool
   level_from_message: bool
+  loki_username: "str?"
+  loki_password: "password?"
+  loki_bearer_token: "password?"
+  loki_tenant_id: "str?"
   metrics_enabled: bool
   metrics_url: "str?"
   metrics_token: "password?"

@@ -20,7 +20,25 @@ opt() { jq -r "$1" "${OPTIONS_FILE}"; }
 # default. Every optional key is listed in config.yaml's options with "" so the
 # form shows it; jq's // would treat that "" as a value.
 optd() { jq -r --arg d "$2" ".$1 | if . == null or . == \"\" then \$d else . end" "${OPTIONS_FILE}"; }
-LOKI_URL=$(opt '.loki_url')
+# alloy_str <value>: the value as the inside of an Alloy string literal, for
+# every option that lands between quotes in the config. Backslash and double
+# quote are escaped, so a `"` in a job name is a `"` in the label and not the
+# end of the string. No label, URL or name means a newline or another control
+# character, so those are refused with the option's value shown.
+# Use as VAR=$(alloy_str "$x"), never with `local`: under set -e the failed
+# substitution then stops the script.
+alloy_str() {
+    case "$1" in *[[:cntrl:]]*) echo "!! an option value contains a control character (a newline?): $(printf '%q' "$1")" >&2; return 1 ;; esac
+    local s="${1//\\/\\\\}"
+    printf '%s' "${s//\"/\\\"}"
+}
+# duration <option> <value>: an interval Alloy and timeout_for both understand.
+duration() {
+    [[ "$2" =~ ^[0-9]+[smh]$ ]] && return 0
+    echo "!! $1 must be a whole number with s, m or h (for example 30s or 2m), not '$2'"
+    exit 1
+}
+LOKI_URL=$(opt '.loki_url // ""')
 LOG_LEVEL=$(optd log_level info)
 JOB=$(optd job systemd-journal)
 STREAM_LABELS=$(opt '(.stream_labels // ["hostname","unit","level"]) | join(" ")')
@@ -94,7 +112,7 @@ if [ "${RAW_CONFIG}" = "true" ]; then
     echo " additional_config is the whole configuration; every other option is ignored."
     echo " Log level: ${LOG_LEVEL}"
     echo "-----------------------------------------------------------"
-    rm -f /data/metrics.token /data/remote_write.password
+    rm -f /data/metrics.token /data/remote_write.password /data/loki.password /data/loki.token
     cat > "${CONFIG_FILE}" <<EOF
 // Grafana Alloy config - raw_config mode: the add-on generated only the
 // logging block below; everything else is additional_config, verbatim.
@@ -110,9 +128,72 @@ EOF
     exit 0
 fi
 
+# ── Where the journal goes ──────────────────────────────────────────────────
+# No default URL: "localhost" inside this container is the container, so a
+# localhost Loki can never answer here, and a healthy add-on shipping nothing
+# is the worst way to find that out. Refuse it with the reason.
+if [ -z "${LOKI_URL}" ]; then
+    echo "!! loki_url is not set - give the push URL of your Grafana Loki, e.g. http://192.168.1.45:3100/loki/api/v1/push"
+    exit 1
+fi
+loki_host=$(printf '%s' "${LOKI_URL}" | sed -E 's#^[A-Za-z][A-Za-z0-9+.-]*://([^/@]*@)?(\[[^]/]*\]|[^]/:]*).*#\2#')
+case "${loki_host,,}" in
+    localhost|localhost.|127.*|0.0.0.0|"[::1]"|"[::]")
+        echo "!! loki_url points at ${loki_host}, which inside this add-on is the add-on itself - nothing listens there."
+        echo "   Use the address of the machine Grafana Loki runs on (its IP or hostname on your network)."
+        exit 1 ;;
+esac
+
+# Authentication for Loki: basic auth (Grafana Cloud and most reverse
+# proxies) or a bearer token, plus the tenant header a multi-tenant Loki
+# needs. Secrets go to 0600 files, never into the config, like the metrics
+# credentials below; an unused one leaves no file.
+LOKI_USERNAME=$(opt '.loki_username // ""')
+LOKI_PASSWORD=$(opt '.loki_password // ""')
+LOKI_BEARER_TOKEN=$(opt '.loki_bearer_token // ""')
+LOKI_TENANT_ID=$(opt '.loki_tenant_id // ""')
+LOKI_PASSWORD_FILE="/data/loki.password"
+LOKI_TOKEN_FILE="/data/loki.token"
+if [ -n "${LOKI_USERNAME}" ] && [ -n "${LOKI_BEARER_TOKEN}" ]; then
+    echo "!! loki_username and loki_bearer_token are both set - a Loki takes one or the other. Clear one."
+    exit 1
+fi
+if [ -n "${LOKI_PASSWORD}" ] && [ -z "${LOKI_USERNAME}" ]; then
+    echo "!! loki_password is set without loki_username - basic auth needs both."
+    exit 1
+fi
+loki_auth=""
+loki_auth_kind="none"
+if [ -n "${LOKI_USERNAME}" ]; then
+    (umask 077; printf '%s' "${LOKI_PASSWORD}" > "${LOKI_PASSWORD_FILE}")
+    loki_auth="    basic_auth {
+      username      = \"$(alloy_str "${LOKI_USERNAME}")\"
+      password_file = \"${LOKI_PASSWORD_FILE}\"
+    }"
+    loki_auth_kind="basic"
+else
+    rm -f "${LOKI_PASSWORD_FILE}"
+fi
+if [ -n "${LOKI_BEARER_TOKEN}" ]; then
+    # printf, not echo: a trailing newline would go out as "Bearer xxx\n".
+    (umask 077; printf '%s' "${LOKI_BEARER_TOKEN}" > "${LOKI_TOKEN_FILE}")
+    loki_auth="    bearer_token_file = \"${LOKI_TOKEN_FILE}\""
+    loki_auth_kind="bearer token"
+else
+    rm -f "${LOKI_TOKEN_FILE}"
+fi
+if [ -n "${LOKI_TENANT_ID}" ]; then
+    loki_auth="${loki_auth}
+    tenant_id = \"$(alloy_str "${LOKI_TENANT_ID}")\""
+fi
+
+# Every option that lands inside an Alloy string, escaped once, here.
+LOKI_URL_S=$(alloy_str "${LOKI_URL}")
+JOB_S=$(alloy_str "${JOB}")
+
 echo "-----------------------------------------------------------"
 echo " Grafana Alloy for Home Assistant (${VARIANT})"
-echo " Loki URL: ${LOKI_URL}"
+echo " Loki URL: ${LOKI_URL}   auth: ${loki_auth_kind}$([ -n "${LOKI_TENANT_ID}" ] && echo "   tenant: ${LOKI_TENANT_ID}")"
 echo " Journal path: ${JOURNAL_PATH}"
 echo " Log level: ${LOG_LEVEL}"
 echo " job: ${JOB}   stream labels: ${STREAM_LABELS}"
@@ -130,7 +211,7 @@ logging {
 
 // As JSON only when structured_metadata needs the extra fields; otherwise the
 // line is the MESSAGE and nothing has to parse or restore it.
-// No `labels = { job = ... }` here: Alloy 1.19.0-1.19.2 overwrite a job label
+// No 'labels = { job = ... }' here: Alloy 1.19.0-1.19.2 overwrite a job label
 // declared on the source with the component id (grafana/alloy#6980, fixed by
 // #6982 for 1.19.3). The job is stamped in loki.process below instead, which
 // every version honours. That stays after 1.19.3 too: a label set by a stage
@@ -167,7 +248,7 @@ echo "}" >> "${CONFIG_FILE}"
 # ── Pipeline ────────────────────────────────────────────────────────────────
 # The job label first, as a stage: the one place every Alloy version honours
 # it (see the loki.source.journal comment above).
-printf '\nloki.process "journal" {\n  stage.static_labels {\n    values = {\n      job = "%s",\n    }\n  }\n' "${JOB}" >> "${CONFIG_FILE}"
+printf '\nloki.process "journal" {\n  stage.static_labels {\n    values = {\n      job = "%s",\n    }\n  }\n' "${JOB_S}" >> "${CONFIG_FILE}"
 
 if [ "${USE_JSON}" = "true" ]; then
 cat >> "${CONFIG_FILE}" <<'EOF'
@@ -268,7 +349,8 @@ cat >> "${CONFIG_FILE}" <<EOF
 
 loki.write "loki" {
   endpoint {
-    url = "${LOKI_URL}"
+    url = "${LOKI_URL_S}"
+${loki_auth}
   }
 }
 EOF
@@ -307,13 +389,16 @@ if [ "${METRICS_ENABLED}" = "true" ] || [ "${HOST_METRICS}" = "true" ]; then
     # Typed str in the schema so the form can show it empty; the check the url
     # type would have done happens here instead.
     case "${METRICS_REMOTE_WRITE_URL}" in http://*|https://*) ;; *) echo "!! metrics_remote_write_url must start with http:// or https://"; exit 1 ;; esac
+    INSTANCE_S=$(alloy_str "${INSTANCE}")
+    METRICS_REMOTE_WRITE_URL_S=$(alloy_str "${METRICS_REMOTE_WRITE_URL}")
+    RW_USER_S=$(alloy_str "${RW_USER}")
     # Hosted Prometheus (Grafana Cloud and the like) wants basic auth on the
     # remote_write. Rendered only when a user is set.
     rw_auth=""
     if [ -n "${RW_USER}" ] && [ "${RW_USER}" != "null" ]; then
         (umask 077; printf '%s' "${RW_PASSWORD}" > "${RW_PASSWORD_FILE}")
         rw_auth="    basic_auth {
-      username      = \"${RW_USER}\"
+      username      = \"${RW_USER_S}\"
       password_file = \"${RW_PASSWORD_FILE}\"
     }"
     else
@@ -325,7 +410,7 @@ if [ "${METRICS_ENABLED}" = "true" ] || [ "${HOST_METRICS}" = "true" ]; then
 // --- metrics go here ---
 prometheus.remote_write "metrics" {
   endpoint {
-    url = "${METRICS_REMOTE_WRITE_URL}"
+    url = "${METRICS_REMOTE_WRITE_URL_S}"
 ${rw_auth}
   }
 }
@@ -348,7 +433,11 @@ if [ "${METRICS_ENABLED}" = "true" ]; then
     hostport="${rest%%/*}"
     path="/${rest#*/}"; [ "${path}" = "/${rest}" ] && path="/metrics"
     case "${scheme}" in http|https) ;; *) echo "!! metrics_url must start with http:// or https://"; exit 1 ;; esac
+    duration metrics_interval "${METRICS_INTERVAL}"
     METRICS_TIMEOUT=$(timeout_for "${METRICS_INTERVAL}")
+    HOSTPORT_S=$(alloy_str "${hostport}")
+    PATH_S=$(alloy_str "${path}")
+    METRICS_JOB_S=$(alloy_str "${METRICS_JOB}")
     auth=""
     if [ -n "${METRICS_TOKEN}" ] && [ "${METRICS_TOKEN}" != "null" ]; then
         # printf, not echo: a trailing newline would go out as "Bearer xxx\n".
@@ -363,12 +452,12 @@ if [ "${METRICS_ENABLED}" = "true" ]; then
 // --- Home Assistant metrics (metrics_enabled) ---
 prometheus.scrape "metrics" {
   targets = [{
-    __address__ = "${hostport}",
-    instance    = "${INSTANCE}",
+    __address__ = "${HOSTPORT_S}",
+    instance    = "${INSTANCE_S}",
   }]
   scheme          = "${scheme}"
-  metrics_path    = "${path}"
-  job_name        = "${METRICS_JOB}"
+  metrics_path    = "${PATH_S}"
+  job_name        = "${METRICS_JOB_S}"
   scrape_interval = "${METRICS_INTERVAL}"
   scrape_timeout  = "${METRICS_TIMEOUT}"
 ${auth}
@@ -391,6 +480,8 @@ fi
 if [ "${HOST_METRICS}" = "true" ]; then
     HOST_JOB=$(optd host_metrics_job node)
     HOST_INTERVAL=$(optd host_metrics_interval 30s)
+    duration host_metrics_interval "${HOST_INTERVAL}"
+    HOST_JOB_S=$(alloy_str "${HOST_JOB}")
     echo " host metrics: every ${HOST_INTERVAL} as job ${HOST_JOB}"
     cat >> "${CONFIG_FILE}" <<EOF
 
@@ -408,17 +499,17 @@ discovery.relabel "host" {
   targets = prometheus.exporter.unix.host.targets
   rule {
     target_label = "job"
-    replacement  = "${HOST_JOB}"
+    replacement  = "${HOST_JOB_S}"
   }
   rule {
     target_label = "instance"
-    replacement  = "${INSTANCE}"
+    replacement  = "${INSTANCE_S}"
   }
 }
 
 prometheus.scrape "host" {
   targets         = discovery.relabel.host.output
-  job_name        = "${HOST_JOB}"
+  job_name        = "${HOST_JOB_S}"
   scrape_interval = "${HOST_INTERVAL}"
   scrape_timeout  = "$(timeout_for "${HOST_INTERVAL}")"
   forward_to      = [prometheus.remote_write.metrics.receiver]

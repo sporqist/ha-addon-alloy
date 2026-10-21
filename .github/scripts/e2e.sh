@@ -14,7 +14,12 @@
 #   3. with OPINIONATED options (custom job, more labels, structured metadata,
 #      level_from_message): the config validates under the profile and the line
 #      arrives under the custom job with the extra labels present
-#   4. the kernel logged ZERO apparmor DENIED (or ALLOWED) events for the profile
+#   5-6. metrics (and host metrics for alloy-host) reach a real Prometheus
+#   7. basic auth, a bearer token and a tenant reach a Loki that checks them
+#   8. a localhost loki_url and contradictory credentials are refused with a
+#      reason; a job with quotes and backslashes ships as that exact label
+#   4. the kernel logged ZERO apparmor DENIED (or ALLOWED) events for the
+#      profile - last, so it covers every run above
 #
 # Usage: e2e.sh <image> <loki-url-as-seen-from-the-container> <loki-url-as-seen-from-the-runner>
 #
@@ -53,10 +58,9 @@ fail() {
   exit 1
 }
 
-# start_addon <options-json>: (re)start the container with these options and
-# wait for its HEALTHCHECK.
+# run_addon <options-json>: (re)start the container with these options.
 DATA=""
-start_addon() {
+run_addon() {
   # A fresh directory per run: the container writes into it as root, and the
   # runner user cannot remove that afterwards.
   DATA="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/addon-data-$RANDOM$RANDOM"
@@ -85,6 +89,11 @@ start_addon() {
     -v "$DATA:/data" \
     "${journal_mounts[@]}" \
     "$IMAGE" >/dev/null
+}
+
+# start_addon <options-json>: run_addon, then wait for its HEALTHCHECK.
+start_addon() {
+  run_addon "$1"
   local st=missing
   for _ in $(seq 1 30); do
     st=$(docker inspect -f '{{.State.Health.Status}}' "$NAME" 2>/dev/null || echo missing)
@@ -101,7 +110,28 @@ start_addon() {
   if [ -z "$LOCAL" ]; then
     case "$logs" in *"error creating journal target"*) fail "journal source could not open the journal" ;; esac
   fi
+  # A command run by accident from the generator (backticks in an unquoted
+  # heredoc did that) shows up only as this line in the log.
+  case "$logs" in *"command not found"*) fail "the init script ran something it should not have: $(printf '%s\n' "$logs" | grep 'command not found')" ;; esac
 }
+
+# expect_refusal <options-json> <text>: the add-on must refuse these options -
+# stop instead of starting - and say why in its log.
+expect_refusal() {
+  run_addon "$1"
+  local running=true
+  for _ in $(seq 1 20); do
+    running=$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null || echo false)
+    [ "$running" = "false" ] && break
+    sleep 3
+  done
+  [ "$running" = "false" ] || fail "the add-on kept running with options it should refuse: $1"
+  local logs; logs=$(docker logs "$NAME" 2>&1)
+  case "$logs" in *"$2"*) echo "refused, saying: $(printf '%s\n' "$logs" | grep -F -- "$2" | head -1)" ;; *) fail "refused, but without saying '$2'" ;; esac
+}
+
+# lq <value>: the value inside a double-quoted LogQL or JSON string.
+lq() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
 
 # probe <job> <probe-text>: write the probe (journal, or a direct push locally)
 # and wait for it under {job=<job>} in Loki. Leaves the matching stream's JSON
@@ -111,7 +141,7 @@ probe() {
   local job="$1" text="$2" q="" found=""
   if [ -n "$LOCAL" ]; then
     docker exec "$NAME" curl -sf -X POST -H 'Content-Type: application/json' \
-      -d "{\"streams\":[{\"stream\":{\"job\":\"$job\",\"e2e\":\"local\"},\"values\":[[\"$(date +%s)000000000\",\"$text\"]]}]}" \
+      -d "{\"streams\":[{\"stream\":{\"job\":\"$(lq "$job")\",\"e2e\":\"local\"},\"values\":[[\"$(date +%s)000000000\",\"$text\"]]}]}" \
       "$LOKI_PUSH" || fail "container cannot push to Loki at $LOKI_PUSH"
   else
     # Inside a transient unit, so the line carries _SYSTEMD_UNIT like a real
@@ -131,7 +161,7 @@ probe() {
     # categorize-labels: stream labels and structured metadata come back apart;
     # without it Loki merges the metadata into the labels of the response.
     q=$(curl -sG -H 'X-Loki-Response-Encoding-Flags: categorize-labels' "$LOKI_QUERY/loki/api/v1/query_range" \
-          --data-urlencode "query={job=\"$job\"} |= \"$text\"" \
+          --data-urlencode "query={job=\"$(lq "$job")\"} |= \"$text\"" \
           --data-urlencode "start=$(( $(date +%s) - 900 ))000000000" \
           --data-urlencode "end=$(( $(date +%s) + 60 ))000000000" \
           --data-urlencode "limit=5")
@@ -203,7 +233,17 @@ docker run -d --name e2e-prom -p "$PROM_PORT:9090" "prom/prometheus:$PROM_TAG" \
   --config.file=/etc/prometheus/prometheus.yml --web.enable-remote-write-receiver >/dev/null
 $PY .github/scripts/metrics-stub.py "$STUB_PORT" "$STUB_TOKEN" 2>/tmp/stub.log &
 STUB_PID=$!
-cleanup() { docker rm -f "$NAME" e2e-prom >/dev/null 2>&1 || true; kill "$STUB_PID" >/dev/null 2>&1 || true; }
+# ── A Loki that wants credentials: the auth proxy in front of the real one.
+# Allowed are exactly one basic-auth and one bearer value, with one tenant.
+PROXY_PORT=9112
+LOKI_USER="e2e-user"
+LOKI_PASS="e2e-pass-$RUN_ID-$RANDOM"
+LOKI_TOKEN="e2e-bearer-$RUN_ID-$RANDOM"
+LOKI_TENANT="e2e-tenant"
+$PY .github/scripts/loki-auth-proxy.py "$PROXY_PORT" "$LOKI_QUERY" "$LOKI_TENANT" \
+  "Basic $(printf '%s:%s' "$LOKI_USER" "$LOKI_PASS" | base64 -w0)" "Bearer $LOKI_TOKEN" 2>/tmp/proxy.log &
+PROXY_PID=$!
+cleanup() { docker rm -f "$NAME" e2e-prom >/dev/null 2>&1 || true; kill "$STUB_PID" "$PROXY_PID" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 for _ in $(seq 1 30); do curl -sf "http://localhost:$PROM_PORT/-/ready" >/dev/null && break; sleep 2; done
 curl -sf "http://localhost:$PROM_PORT/-/ready" >/dev/null || fail "Prometheus never became ready"
@@ -213,6 +253,11 @@ for _ in $(seq 1 15); do
   sleep 1
 done
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$STUB_PORT/metrics")" = "401" ] || { cat /tmp/stub.log; fail "the metrics stub is not answering (expected 401 without a token)"; }
+for _ in $(seq 1 15); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:$PROXY_PORT/loki/api/v1/push")" = "401" ] && break
+  sleep 1
+done
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:$PROXY_PORT/loki/api/v1/push")" = "401" ] || { cat /tmp/proxy.log; fail "the Loki auth proxy is not answering (expected 401 without credentials)"; }
 
 say "1. AppArmor on the runner"
 if [ -n "$LOCAL" ]; then
@@ -387,6 +432,39 @@ if [ "$SLUG" = "alloy-host" ]; then
   [ -n "$found" ] || fail "node_cpu_seconds_total / node_memory_MemTotal_bytes never arrived in Prometheus under job=node"
   echo "unix exporter -> remote_write -> Prometheus: cpu series present, MemTotal > 0"
 fi
+
+say "7. Loki authentication: basic auth, bearer token, tenant"
+# The proxy forwards only exact credentials and the exact tenant, so a line
+# arriving in Loki through it proves all three were sent as configured.
+PROXY_PUSH="http://host.docker.internal:$PROXY_PORT/loki/api/v1/push"
+if [ -z "$LOCAL" ]; then
+  start_addon "$(python3 -c 'import json,sys; print(json.dumps({"loki_url":sys.argv[1],"job":"e2e-basic","loki_username":sys.argv[2],"loki_password":sys.argv[3],"loki_tenant_id":sys.argv[4]}))' "$PROXY_PUSH" "$LOKI_USER" "$LOKI_PASS" "$LOKI_TENANT")"
+  plen=$(docker exec "$NAME" sh -c 'wc -c < /data/loki.password')
+  [ "$plen" = "${#LOKI_PASS}" ] || fail "password file is $plen bytes, password is ${#LOKI_PASS}"
+  [ "$(docker exec "$NAME" stat -c '%a' /data/loki.password)" = "600" ] || fail "password file is not 0600"
+  docker exec "$NAME" grep -qF "$LOKI_PASS" /etc/alloy/config.alloy && fail "the password is in the generated config"
+  probe e2e-basic "ci-probe-basic-$RUN_ID-$RANDOM"
+  grep -q 'forwarded 0' /tmp/proxy.log || { cat /tmp/proxy.log; fail "the line arrived, but not through basic auth"; }
+  echo "basic auth + tenant: accepted by the proxy, line in Loki"
+
+  start_addon "$(python3 -c 'import json,sys; print(json.dumps({"loki_url":sys.argv[1],"job":"e2e-bearer","loki_bearer_token":sys.argv[2],"loki_tenant_id":sys.argv[3]}))' "$PROXY_PUSH" "$LOKI_TOKEN" "$LOKI_TENANT")"
+  docker exec "$NAME" test -e /data/loki.password && fail "the unused password file was left behind"
+  probe e2e-bearer "ci-probe-bearer-$RUN_ID-$RANDOM"
+  grep -q 'forwarded 1' /tmp/proxy.log || { cat /tmp/proxy.log; fail "the line arrived, but not through the bearer token"; }
+  echo "bearer token + tenant: accepted by the proxy, line in Loki"
+else
+  echo "skipped (E2E_LOCAL: the local probe pushes past Alloy)"
+fi
+
+say "8. Options that must be refused, and values that must be escaped"
+expect_refusal "{\"loki_url\":\"http://localhost:3100/loki/api/v1/push\"}" "is the add-on itself"
+expect_refusal "{\"loki_url\":\"$LOKI_PUSH\",\"loki_username\":\"u\",\"loki_bearer_token\":\"t\"}" "one or the other"
+# A job with a quote and a backslash is a label value like any other, not
+# the end of an Alloy string.
+QJOB='e2e "quoted" \ job'
+start_addon "$(python3 -c 'import json,sys; print(json.dumps({"loki_url":sys.argv[1],"job":sys.argv[2]}))' "$LOKI_PUSH" "$QJOB")"
+probe "$QJOB" "ci-probe-quoted-$RUN_ID-$RANDOM"
+echo "a job with a quote and a backslash shipped as that label"
 
 say "4. Zero AppArmor denials for the profile"
 if [ -n "$LOCAL" ]; then

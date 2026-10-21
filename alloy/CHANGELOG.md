@@ -16,6 +16,31 @@ goes directly under the marker below, which Renovate needs to find its
 heading.
 
 <!-- renovate:alloy-release -->
+## 1.21.0.1
+
+_2026-10-22_
+
+### Added
+- Authentication for Grafana Loki: `loki_username` and `loki_password` (basic
+  auth, as Grafana Cloud and most reverse proxies want), or
+  `loki_bearer_token`, and `loki_tenant_id` for a multi-tenant Loki. The
+  secrets are kept in 0600 files, never in the generated config. Until now an
+  authenticated Loki needed `raw_config`.
+
+### Changed
+- `loki_url` has no default any more. The old one, `localhost`, is the add-on
+  itself, where no Loki answers, so a fresh install looked healthy and shipped
+  nothing. A `localhost` or `127.x` URL is now refused with the reason.
+  Existing installs keep the URL they have.
+- Option values are escaped before they go into the config: a `"` or `\` in a
+  job, instance or tenant is part of the value, not the end of a string. A
+  newline in one is refused. Intervals must be a whole number of s, m or h.
+
+### Fixed
+- Every start logged `labels: command not found` at error level: a comment in
+  the generated config contained backticks, which the generator ran as a
+  command.
+
 ## 1.21.0
 
 Grafana Alloy 1.21.0; the add-on itself is unchanged.
