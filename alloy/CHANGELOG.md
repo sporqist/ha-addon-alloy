@@ -10,7 +10,10 @@ when that fails (core, `homeassistant/components/hassio/update.py`).
 
 The top section is written by Renovate when it bumps Grafana Alloy: it carries
 the release the add-on bundles now, and pushes the previous one down as its own
-section. Add-on changes of our own get a section with a fourth component.
+section. Add-on changes of our own get a section with a fourth component, and
+so does a base image update, written by the revision bot. Every new section
+goes directly under the marker below, which Renovate needs to find its
+heading.
 
 <!-- renovate:alloy-release -->
 ## 1.21.0

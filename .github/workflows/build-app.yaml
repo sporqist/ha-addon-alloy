@@ -1,6 +1,11 @@
 # Reusable: build one add-on for every architecture in its config.yaml and,
 # when publishing, push the per-arch images and the multi-arch manifest to
 # GHCR under the `image` name from config.yaml, tagged with its `version`.
+#
+# A version is published ONCE. If its tag already exists, this builds and
+# tests but pushes nothing: a tag that moved would give two hosts on the
+# "same" version different images, and Home Assistant never offers the newer
+# one, because it updates only when the version string changes.
 name: Build app
 
 on:
@@ -26,6 +31,7 @@ jobs:
       url: ${{ steps.normalize.outputs.url }}
       registry_prefix: ${{ steps.normalize.outputs.registry_prefix }}
       version: ${{ steps.normalize.outputs.version }}
+      publish: ${{ steps.published.outputs.publish }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,6 +58,27 @@ jobs:
           if [[ -n "$url" && "$url" != "null" ]]; then
             echo "url=${url}" >> "$GITHUB_OUTPUT"
           fi
+
+      # Fails closed: a registry that cannot be asked is a failed job, never
+      # "not published, go ahead" - that is how a tag gets overwritten.
+      - name: Publish only a version that is not published yet
+        id: published
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          IMAGE: ${{ steps.normalize.outputs.registry_prefix }}/${{ steps.normalize.outputs.image_name }}
+          VERSION: ${{ steps.normalize.outputs.version }}
+        run: |
+          if [[ "$PUBLISH" != "true" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          rc=0; bash .github/scripts/tag-published.sh "$IMAGE" "$VERSION" || rc=$?
+          case "$rc" in
+            0) echo "::notice::$IMAGE:$VERSION is already published; published tags never change, so nothing is pushed"
+               echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            1) echo "$IMAGE:$VERSION is new; publishing"
+               echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::could not ask the registry whether $IMAGE:$VERSION exists"; exit 1 ;;
+          esac
 
       - name: Prepare build matrix
         id: matrix
@@ -93,7 +120,7 @@ jobs:
             io.hass.name=${{ needs.prepare.outputs.name }}
             io.hass.description=${{ needs.prepare.outputs.description }}
             ${{ needs.prepare.outputs.url && format('io.hass.url={0}', needs.prepare.outputs.url) || '' }}
-          push: ${{ inputs.publish }}
+          push: ${{ needs.prepare.outputs.publish == 'true' }}
           version: ${{ needs.prepare.outputs.version }}
 
   # The gate that makes automerge safe: the image built from this commit runs
@@ -152,7 +179,7 @@ jobs:
   manifest:
     name: Publish multi-arch manifest
     needs: [prepare, build, test]
-    if: inputs.publish
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write

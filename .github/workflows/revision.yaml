@@ -1,0 +1,101 @@
+# The revision bot. When Renovate changes what a host installs without moving
+# the version - a base image update - this gives the add-on its next revision
+# (1.21.0 -> 1.21.0.1) and the changelog section for it, and pushes that onto
+# Renovate's branch. The Builder's version gate fails until it has.
+#
+# Pushed with a GitHub App token, not GITHUB_TOKEN: a push made with
+# GITHUB_TOKEN starts no workflows, so the required CI would never run on the
+# bot's commit. renovate.json lists the app as a gitIgnoredAuthor, so Renovate
+# still treats the branch as its own: it keeps rebasing it (dropping this
+# commit, which this then re-adds) and automerges it once CI is green.
+#
+# The bot's script runs from the BASE branch checkout, never from the pull
+# request's: the write token must not execute code a pull request can change.
+#
+# Setup: a GitHub App owned by the repository owner, installed on this
+# repository only, with one permission (Contents: read and write) and no
+# webhook. Its Client ID goes into the secret RELEASE_APP_CLIENT_ID, a private
+# key into RELEASE_APP_PRIVATE_KEY, and its bot address
+# (<bot user id>+<slug>[bot]@users.noreply.github.com) into renovate.json's
+# gitIgnoredAuthors.
+name: Revision
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: revision-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Revision for base image updates
+    if: github.event.pull_request.user.login == 'renovate[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the app is configured
+        env:
+          CLIENT_ID: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$CLIENT_ID" || -z "$PRIVATE_KEY" ]]; then
+            echo "::error::RELEASE_APP_CLIENT_ID / RELEASE_APP_PRIVATE_KEY are not set; see the header of .github/workflows/revision.yaml"
+            exit 1
+          fi
+
+      - name: Get a token for the release app
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Check out the bot (base branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          path: pr
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Bump the revision where one is needed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Against the merge base: the pull request's own changes, even when
+          # main has moved on since Renovate last rebased.
+          base=$(git -C pr merge-base "$BASE_SHA" HEAD)
+          python3 trusted/.github/scripts/version.py bump --repo pr --base "$base" --title "$TITLE"
+
+      - name: Push it to the pull request
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          cd pr
+          if git diff --quiet; then
+            echo "nothing to push"; exit 0
+          fi
+          # The app's bot user, so the commit is attributed to it and matches
+          # renovate.json's gitIgnoredAuthors.
+          id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git -c user.name="${APP_SLUG}[bot]" -c user.email="${id}+${APP_SLUG}[bot]@users.noreply.github.com" \
+            commit -qam "Release the image change as a new revision"
+          git push origin "HEAD:${HEAD_REF}"
+          git log -1 --stat

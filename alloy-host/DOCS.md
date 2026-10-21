@@ -33,7 +33,7 @@ Set `metrics_instance` to your Home Assistant's hostname - the add-on cannot see
 
 ## How it relates to the base add-on
 
-This image is the base image **plus one marker file**, built `FROM` the base at a pinned tag and digest. The add-on's version is `<base version>.<host revision>`: `1.13.2.3.1` runs base `1.13.2.3` (Grafana Alloy 1.13.2). When the base publishes a new version, Renovate proposes the bump here, it passes the same test gate (the combined image under this add-on's own AppArmor profile, host metrics asserted in a real Prometheus), and merges. That is one automation cycle of lag behind the base - a known property, not a surprise.
+This image is the base image **plus one marker file**, built `FROM` the base at a pinned tag and digest. The add-on's version is the base version it runs, and a host-only change adds a revision to the base version padded to four components: `1.13.2.3.1` runs base `1.13.2.3` (Grafana Alloy 1.13.2), `1.20.1.0.1` runs base `1.20.1`. Like the base, each version is published once and its tag never changes. When the base publishes a new version, Renovate proposes the bump here, it passes the same test gate (the combined image under this add-on's own AppArmor profile, host metrics asserted in a real Prometheus), and merges. That is one automation cycle of lag behind the base - a known property, not a surprise.
 
 ## AppArmor
 

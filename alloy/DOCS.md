@@ -69,7 +69,9 @@ Note: This is injected as-is into the config file. Syntax errors will prevent Gr
 
 ## Unattended updates - what this posture is, and what it is not for
 
-This add-on updates itself: Renovate proposes each Grafana Alloy release (after it is at least 3 days old), CI builds the image and runs it **under its AppArmor profile in enforce mode against a real journal and a real Grafana Loki**, a green gate automerges, the image is published, and Home Assistant's per-add-on auto-update installs it. The actions that build and publish are pinned by commit SHA and their bumps stay manual - a compromised build action is the one thing the gate cannot catch.
+This add-on updates itself: Renovate proposes each Grafana Alloy release and each base image update (after it is at least 3 days old), CI builds the image and runs it **under its AppArmor profile in enforce mode against a real journal and a real Grafana Loki**, a green gate automerges, the image is published, and Home Assistant's per-add-on auto-update installs it. A base image update has no version of its own, so a bot gives it the next add-on revision (`1.21.0` → `1.21.0.1`) before the gate passes. The actions that build and publish are pinned by commit SHA and their bumps stay manual - a compromised build action is the one thing the gate cannot catch.
+
+**One version, one image.** A version is published once and its tag never moves. The same version string therefore means the same image on every host, and a change that is not in a new version is in no image at all: the gate fails a pull request that changes the image, the profile or the options without one.
 
 That is acceptable **because the blast radius is bounded**: a bad update stops log shipping from one host. It does not touch Home Assistant Core, the Supervisor, or anything the house depends on. **Do not copy this posture onto an add-on that automations, heating, locks or lights depend on.**
 
@@ -77,7 +79,7 @@ What CI cannot reproduce is your host. So pair auto-update with an alert on the 
 
 **When an Grafana Alloy bump stalls.** Some releases touch new files or need new syscalls. The gate then fails with `apparmor="DENIED"` lines naming the path, Renovate keeps the PR open and red, and nothing ships. That reads as "the profile needs a path", not "something broke": add the access to `apparmor.txt` in a PR of its own (as narrowly as the denial allows), merge it, and Renovate rebases and retries the bump on its own. Grafana Alloy 1.19 was the first case: its bundled Snowflake driver maps a library it extracts to `/tmp`, and its usage reporter reads the DMI UUID (reporting is off here).
 
-**Rollback** is a revert: every published version tag stays on GHCR. Open a PR that sets `version:` in `config.yaml` and `ALLOY_VERSION` in the Dockerfile back to the last good release; once merged and published, Home Assistant "updates" to it.
+**Rollback** is a release of the old content under a new version: every published tag stays on GHCR unchanged, but a version that already exists is never published again, so it cannot be "re-released". Revert the change and give it the next revision (`1.21.0.1` → `1.21.0.2`), or set `ALLOY_VERSION` back to the last good Grafana Alloy and use the next revision of that (`1.20.1.N`; Renovate will propose the newer release again, so close that PR until it is fixed); Home Assistant installs it as an update. A single host can go back on its own by restoring the add-on from the backup Home Assistant takes before an update, when that option is on.
 
 ## Support
 
