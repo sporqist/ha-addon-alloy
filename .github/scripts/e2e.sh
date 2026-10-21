@@ -269,7 +269,8 @@ else
   # The complain flag, if present, is stripped: the test must run in ENFORCE.
   sed -e "s/^profile $SLUG /profile $CI_PROFILE /" -e 's/,complain)/)/; s/(complain,/(/' "$PROFILE_SRC" > "/tmp/$CI_PROFILE.profile"
   grep -q "^profile $CI_PROFILE " "/tmp/$CI_PROFILE.profile" || fail "profile rename did not take"
-  grep -q 'complain' "/tmp/$CI_PROFILE.profile" && fail "complain flag still present after strip"
+  # Flags only: a comment may mention complain mode.
+  grep -q '^[^#]*complain' "/tmp/$CI_PROFILE.profile" && fail "complain flag still present after strip"
   sudo apparmor_parser -r -W "/tmp/$CI_PROFILE.profile" || fail "profile does not parse"
   [ "$(sudo aa-status | grep -c "$CI_PROFILE")" -gt 0 ] || fail "profile not loaded"
   echo "profile loaded in enforce mode"
