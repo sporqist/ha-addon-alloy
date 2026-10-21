@@ -16,6 +16,19 @@ goes directly under the marker below, which Renovate needs to find its
 heading.
 
 <!-- renovate:alloy-release -->
+## 1.21.0.2
+
+_2026-10-22_
+
+### Changed
+- AppArmor: the outer profile, which covers s6-overlay and the generator
+  scripts, no longer allows every file operation. It started from Home
+  Assistant's template, whose blanket `file,` rule made all of its path rules
+  meaningless; it now allows only what a complain-mode run of the whole test
+  suite showed is used. Writes outside `/data`, `/etc/alloy`, `/tmp` and
+  `/run` are denied. The Grafana Alloy process itself was already confined
+  this tightly and is unchanged.
+
 ## 1.21.0.1
 
 _2026-10-22_
