@@ -8,7 +8,7 @@ name: Alloy
 # CHANGELOG.md's top section, all in one pull request. Home Assistant shows
 # that section as the release notes, so a version without one is a bug the
 # gate fails on.
-version: "1.20.1"
+version: "1.21.0"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.

@@ -13,6 +13,11 @@ the release the add-on bundles now, and pushes the previous one down as its own
 section. Add-on changes of our own get a section with a fourth component.
 
 <!-- renovate:alloy-release -->
+## 1.21.0
+
+Grafana Alloy 1.21.0; the add-on itself is unchanged.
+Upstream release notes: https://github.com/grafana/alloy/releases/tag/v1.21.0
+
 ## 1.20.1
 
 Grafana Alloy 1.20.1; the add-on itself is unchanged.
