@@ -10,7 +10,7 @@ name: Alloy (host metrics)
 # bumps the Dockerfile's FROM, and the matching section into CHANGELOG.md. A
 # host-only change appends a further component (1.20.1 -> 1.20.1.1) and writes
 # its own changelog section; the gate checks both.
-version: "1.20.1"
+version: "1.21.0"
 slug: alloy-host
 description: >-
   Ship the Home Assistant OS journal to Loki and host metrics (CPU, memory,

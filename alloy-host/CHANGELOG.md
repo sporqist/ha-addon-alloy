@@ -11,6 +11,11 @@ The top section is written by Renovate when it moves this add-on onto a new
 base image.
 
 <!-- renovate:base-image -->
+## 1.21.0
+
+Built on the Alloy add-on 1.21.0; nothing host-specific changed.
+See `../alloy/CHANGELOG.md` for what that release carries.
+
 ## 1.20.1
 
 Built on the Alloy add-on 1.20.1; nothing host-specific changed.
