@@ -10,6 +10,9 @@
   ],
   "dependencyDashboard": true,
   "platformAutomerge": false,
+  "gitIgnoredAuthors": [
+    "346504218+sporqist-alloy-release[bot]@users.noreply.github.com"
+  ],
   "automergeType": "pr",
   "customManagers": [
     {
