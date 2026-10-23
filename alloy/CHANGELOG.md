@@ -16,6 +16,18 @@ goes directly under the marker below, which Renovate needs to find its
 heading.
 
 <!-- renovate:alloy-release -->
+## 1.21.0.3
+
+_2026-10-24_
+
+### Fixed
+- AppArmor denied the HEALTHCHECK's `curl` reading `/etc/ssl/openssl.cnf`
+  on Home Assistant OS, every 30 seconds since 1.21.0.2. The test runner's
+  newer AppArmor allows that file through its base abstraction, so the gate
+  could not see it. The profile now allows it itself, and CI compiles the
+  profile against the AppArmor 3.1.7 abstractions Home Assistant OS uses.
+  Log shipping was not affected.
+
 ## 1.21.0.2
 
 _2026-10-22_
