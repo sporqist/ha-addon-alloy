@@ -31,9 +31,8 @@ profile alloy-host flags=(attach_disconnected,mediate_deleted) {
   /etc/group r,
   /etc/nsswitch.conf r,
 
-  # The HEALTHCHECK's curl loads OpenSSL's config. AppArmor 4's abstractions/base
-  # allows it (through abstractions/crypto); the AppArmor 3 on Home Assistant
-  # OS does not, so the CI runner cannot be relied on for this one.
+  # The HEALTHCHECK's curl loads OpenSSL's config. AppArmor 4 allows that in
+  # abstractions/base; the 3.1.7 Home Assistant OS ships does not.
   /etc/ssl/openssl.cnf r,
 
   # The variant marker the generator reads (alloy-host has one, alloy not)

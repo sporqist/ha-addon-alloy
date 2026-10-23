@@ -271,7 +271,21 @@ else
   grep -q "^profile $CI_PROFILE " "/tmp/$CI_PROFILE.profile" || fail "profile rename did not take"
   # Flags only: a comment may mention complain mode.
   grep -q '^[^#]*complain' "/tmp/$CI_PROFILE.profile" && fail "complain flag still present after strip"
-  sudo apparmor_parser -r -W "/tmp/$CI_PROFILE.profile" || fail "profile does not parse"
+  # Home Assistant OS compiles the profile against its own AppArmor's
+  # abstractions (3.1.7, home-assistant/buildroot package/apparmor), and what
+  # abstractions/base allows changes between versions: 4.x, the runner's, pulls
+  # in abstractions/openssl, 3.x does not. Compile against the same tree, or the
+  # gate allows what Home Assistant OS denies. Move both when HA OS moves.
+  AA_TAG=v3.1.7
+  AA_COMMIT=7279fae3d1e4e9e3c3d9a42079184d638a38bd3c
+  AA_TREE="/tmp/apparmor-$AA_TAG"
+  if [ ! -d "$AA_TREE" ]; then
+    git -c core.autocrlf=false -c advice.detachedHead=false clone -q --depth 1 --filter=blob:none --sparse \
+      --branch "$AA_TAG" https://gitlab.com/apparmor/apparmor.git "$AA_TREE" || fail "cannot fetch AppArmor $AA_TAG"
+    git -C "$AA_TREE" sparse-checkout set profiles/apparmor.d || fail "cannot check out AppArmor $AA_TAG's profiles"
+  fi
+  [ "$(git -C "$AA_TREE" rev-parse HEAD)" = "$AA_COMMIT" ] || fail "AppArmor $AA_TAG is not commit $AA_COMMIT"
+  sudo apparmor_parser -r -W -b "$AA_TREE/profiles/apparmor.d" "/tmp/$CI_PROFILE.profile" || fail "profile does not parse"
   [ "$(sudo aa-status | grep -c "$CI_PROFILE")" -gt 0 ] || fail "profile not loaded"
   echo "profile loaded in enforce mode"
   echo "runner journald writes to: $(sudo journalctl --header 2>/dev/null | sed -n 's/^File path: //p' | head -1)"
