@@ -13,12 +13,26 @@
 profile alloy flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
 
-  # Capabilities
-  file,
+  # No blanket `file,` rule (the Home Assistant template has one, and with it
+  # every path rule below would be decoration). File access is what is listed
+  # here and nothing else; the list was taken from a complain-mode run of the
+  # whole e2e, every option path included, and the gate keeps it honest.
   signal (send) set=(kill,term,int,hup,cont),
 
-  # S6-Overlay (v3 layout: s6-rc.d under /etc/s6-overlay)
-  /init ix,
+  # S6-Overlay (v3 layout: s6-rc.d under /etc/s6-overlay). Its stages are
+  # scripts, so they are read as well as executed.
+  /init rix,
+  /package/** r,
+  /etc/fix-attrs.d/ r,
+  /etc/services.d/ r,
+
+  # Users and groups: s6-overlay-suexec, bash and the HEALTHCHECK's curl
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+
+  # The variant marker the generator reads (alloy-host has one, alloy not)
+  /etc/alloy-addon/variant r,
   /bin/** ix,
   /usr/bin/** ix,
   /run/{s6,s6-rc*,service}/** ix,
