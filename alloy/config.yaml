@@ -7,7 +7,10 @@ name: Alloy
 # back to 0, implicitly), into the Dockerfile's ALLOY_VERSION and into
 # CHANGELOG.md's top section, all in one pull request. Home Assistant shows
 # that section as the release notes, so a version without one is a bug the
-# gate fails on.
+# gate fails on. Each version is published once and its tag never changes:
+# every change to the image, the profile or the options needs a new revision
+# (the gate says which), and on a Renovate base image bump the revision bot
+# (.github/workflows/revision.yaml) writes it.
 version: "1.21.0"
 slug: alloy
 description: >-

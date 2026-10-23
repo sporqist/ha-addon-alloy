@@ -1,4 +1,5 @@
-# Builds the add-on image on every PR and publishes it to GHCR on merge to main.
+# Builds the add-on image on every PR and publishes it to GHCR on merge to main,
+# once per version: a tag that is already published is never pushed again.
 # Adapted from home-assistant/apps-example (the official blueprint after the
 # April 2026 move from the legacy builder container to BuildKit).
 name: Builder
@@ -27,6 +28,18 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Published tags never change (build-app skips one that exists), so a
+      # change to what a host installs without a new version would reach
+      # nobody. On a Renovate base image bump this fails once, until the
+      # revision bot (revision.yaml) pushes the version; then it passes.
+      - name: A new version for every change a host installs
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 .github/scripts/version.py check --base "$BASE_SHA"
 
       - name: Get changed files
         id: changed_files

@@ -44,7 +44,7 @@ Grafana Alloy's unauthenticated debug UI is not published on the host by default
 Forked from [ecohash-co/ha-addon-alloy](https://github.com/ecohash-co/ha-addon-alloy) (MIT) to run unattended in two households:
 
 - **AppArmor enabled** with a custom profile (upstream shipped `apparmor: false`).
-- **Pre-built images** on GHCR from the `home-assistant/builder` actions; the HA host pulls and never builds.
+- **Pre-built images** on GHCR from the `home-assistant/builder` actions; the HA host pulls and never builds. Each version is published once and its tag never changes, so one version is one image on every host.
 - **Checksum-verified Grafana Alloy download** against Grafana's published `SHA256SUMS`.
 - **Renovate** tracks Grafana Alloy releases, the base image and the actions; the add-on version is the Grafana Alloy version.
 - `libsystemd0` installed explicitly, `build.yaml` removed, debug port unmapped by default, unused `addon_config` mapping dropped.

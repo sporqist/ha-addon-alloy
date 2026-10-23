@@ -1,7 +1,8 @@
 # Changelog
 
 The add-on version is the version of the base add-on this one is built on;
-a host-only change adds a further component to it. The base changelog is in
+a host-only change pads that to four components and adds a fifth
+(`1.20.1.0.1`), so it never collides with a later base revision. The base changelog is in
 `../alloy/CHANGELOG.md` and carries everything this add-on inherits.
 
 Every heading is the bare version, nothing else on the line: Home Assistant

@@ -61,7 +61,8 @@ if index + 1 < len(versions):
     if not match:
         print(f"!! {app}: Home Assistant's release-notes regex does not match '## {version}'.")
         sys.exit(1)
-    if f"## {previous}" in match.group(0):
+    # A whole heading line, not a substring: "## 1.20.1.1" contains "## 1.20.1".
+    if f"## {previous}" in match.group(0).splitlines()[1:]:
         print(f"!! {app}: the slice for {version} runs past '## {previous}' into older sections.")
         sys.exit(1)
     lines = len(match.group(0).splitlines())

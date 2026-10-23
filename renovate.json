@@ -10,6 +10,9 @@
   ],
   "dependencyDashboard": true,
   "platformAutomerge": false,
+  "gitIgnoredAuthors": [
+    "346504218+sporqist-alloy-release[bot]@users.noreply.github.com"
+  ],
   "automergeType": "pr",
   "customManagers": [
     {
@@ -104,7 +107,7 @@
       ]
     },
     {
-      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line; automerges after the e2e gate rebuilds on it",
+      "description": "Base image tags look like trixie-2026.08.0: track the date part within the trixie line; automerges after the e2e gate rebuilds on it. The bump moves no version by itself; the revision bot (revision.yaml) adds the next add-on revision to the branch, which is what lets it publish and reach hosts.",
       "matchDatasources": [
         "docker"
       ],
@@ -158,9 +161,20 @@
       "automerge": true
     },
     {
-      "description": "A changelog heading is text, not an image reference: nothing to pin a digest into. Last rule, so it overrides pinDigests for these files only.",
+      "description": "Our own published tags never change (build-app skips a tag that exists), so a digest-only update of one is an anomaly, not an update. It is also what the 1.20.1 tag produced before tags were immutable: republished under the same version, Renovate tried to pin alloy-host to the new digest and errored.",
+      "matchPackageNames": [
+        "ghcr.io/sporqist/ha-addon-alloy"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "A changelog heading and a config.yaml version line are text, not image references: nothing to pin a digest into (alloy-host's config.yaml version tracks the base image tag, and a pin there is an update Renovate cannot write). Last rule, so it overrides pinDigests for these files only.",
       "matchFileNames": [
-        "**/CHANGELOG.md"
+        "**/CHANGELOG.md",
+        "**/config.yaml"
       ],
       "pinDigests": false
     }
