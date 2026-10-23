@@ -2,7 +2,31 @@ configuration:
   loki_url:
     name: Grafana Loki push URL
     description: >-
-      Where the journal goes, e.g. http://192.168.1.45:3100/loki/api/v1/push.
+      Where the journal goes, e.g. http://192.168.1.45:3100/loki/api/v1/push:
+      the address of the machine Grafana Loki runs on. localhost would be this
+      add-on itself.
+  loki_username:
+    name: Grafana Loki username
+    description: >-
+      Basic auth user for the push - for Grafana Cloud, the stack's Loki user
+      ID; behind a reverse proxy, its user. Leave empty for a Loki without
+      authentication. Use this or a bearer token, not both.
+  loki_password:
+    name: Grafana Loki password
+    description: >-
+      Basic auth password (for Grafana Cloud, an access policy token with
+      logs:write). Kept in a file only the add-on can read, never in the
+      generated configuration.
+  loki_bearer_token:
+    name: Grafana Loki bearer token
+    description: >-
+      Sent as "Authorization: Bearer ..." on every push, for a Loki behind a
+      token-checking proxy. Use this or a username, not both.
+  loki_tenant_id:
+    name: Grafana Loki tenant
+    description: >-
+      Sent as the X-Scope-OrgID header, for a multi-tenant Loki. Leave empty
+      for a single-tenant Loki and for Grafana Cloud.
   log_level:
     name: Grafana Alloy log level
     description: >-

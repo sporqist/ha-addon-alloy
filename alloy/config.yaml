@@ -11,7 +11,7 @@ name: Alloy
 # every change to the image, the profile or the options needs a new revision
 # (the gate says which), and on a Renovate base image bump the revision bot
 # (.github/workflows/revision.yaml) writes it.
-version: "1.21.0"
+version: "1.21.0.1"
 slug: alloy
 description: >-
   Ship the Home Assistant OS systemd journal to Loki with Grafana Alloy.
@@ -39,8 +39,10 @@ ports_description:
 # file. Upstream shipped `apparmor: false`, which is the point of this fork.
 # Defaults are faithful and minimal: the journal as journald recorded it.
 # Everything that transforms it is opt-in. See DOCS.md for each option.
+# No loki_url default: localhost in here is the add-on itself, where no Loki
+# answers, and the Supervisor refuses to start an add-on whose required
+# option is unset - which is the right moment to ask for it.
 options:
-  loki_url: "http://localhost:3100/loki/api/v1/push"
   log_level: info
   job: systemd-journal
   stream_labels:
@@ -56,6 +58,10 @@ options:
   # configuration options". An empty string is valid for str/password
   # types. It is NOT valid for the url type (vol.Url rejects ""), which is why
   # the two metrics URLs are typed str below and checked by the generator.
+  loki_username: ""
+  loki_password: ""
+  loki_bearer_token: ""
+  loki_tenant_id: ""
   metrics_enabled: false
   metrics_url: ""
   metrics_token: ""
@@ -75,6 +81,12 @@ schema:
     - "list(hostname|unit|level|syslog_identifier|container_name|transport|priority)"
   structured_metadata: bool
   level_from_message: bool
+  # Loki authentication: basic auth OR a bearer token (the generator refuses
+  # both), and the X-Scope-OrgID tenant for a multi-tenant Loki.
+  loki_username: "str?"
+  loki_password: "password?"
+  loki_bearer_token: "password?"
+  loki_tenant_id: "str?"
   # Optional metrics scrape (Home Assistant's /api/prometheus by default),
   # remote-written to a Prometheus. Nothing is read unless metrics_enabled.
   metrics_enabled: bool

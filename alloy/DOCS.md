@@ -10,13 +10,24 @@ The defaults ship the journal **as journald recorded it**: job `systemd-journal`
 
 | Option | Default | What it does |
 |---|---|---|
-| `loki_url` | *(required)* | Grafana Loki push endpoint, e.g. `http://192.168.1.45:3100/loki/api/v1/push` |
+| `loki_url` | *(required)* | Grafana Loki push endpoint, e.g. `http://192.168.1.45:3100/loki/api/v1/push`. The address of the machine Grafana Loki runs on: `localhost` is the add-on itself, so the add-on refuses it |
+| `loki_username` / `loki_password` | *(empty)* | Basic auth for the push, as Grafana Cloud and most reverse proxies require. The password is kept in a 0600 file, never in the generated config |
+| `loki_bearer_token` | *(empty)* | Sent as `Authorization: Bearer …` instead, for a token-checking proxy. Set this **or** a username, not both - the add-on refuses both |
+| `loki_tenant_id` | *(empty)* | Sent as `X-Scope-OrgID`, for a multi-tenant Grafana Loki. Not needed for Grafana Cloud or a single-tenant Loki |
 | `log_level` | `info` | Grafana Alloy's own verbosity (`debug`, `info`, `warn`, `error`) |
 | `job` | `systemd-journal` | The `job` label on every stream. Set it if this instance should be told apart from other journals in the same Grafana Loki |
 | `stream_labels` | `hostname`, `unit`, `level` | Which journal fields become **stream labels**. Also available: `syslog_identifier`, `container_name`, `transport`, `priority`. Every added label multiplies streams in your Grafana Loki - add deliberately |
 | `structured_metadata` | `false` | Carry `syslog_identifier`, `container_name`, `transport` and `priority` as [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/) on every line - queryable, but not streams. **Needs Grafana Loki 2.9+ with structured metadata enabled (schema v13)**; a Grafana Loki without it rejects the whole push, which is why this is off by default |
 | `level_from_message` | `false` | Docker's journald driver logs a container's stderr at priority `err`, so an add-on's `WARN` or `INFO` line written to stderr arrives as `level="error"`. When on, container lines at that priority get `level` re-derived from the line (logfmt `level=...`, or a bare `WARN`/`INFO`/... token), falling back to `error`. Off = the journal's own priority, untouched |
 | `additional_config` | *(empty)* | Raw Grafana Alloy config appended to the generated file, validated before Grafana Alloy starts |
+
+**Grafana Cloud:** the stack's *Loki* details page has the push URL and the user ID. Create an access policy token with the `logs:write` scope for the password:
+
+```yaml
+loki_url: "https://logs-prod-012.grafana.net/loki/api/v1/push"
+loki_username: "123456"
+loki_password: "glc_…"
+```
 
 `hostname` is the HA OS hostname, which is `homeassistant` on every default install. If you ship more than one instance to the same Grafana Loki, set a distinct `job` per instance (or distinct hostnames).
 
@@ -43,7 +54,7 @@ Grafana Alloy's debug UI (component health, pipeline graph) listens on port 1234
 
 ## Expert: raw configuration mode
 
-`raw_config: true` turns the add-on into a plain Grafana Alloy runner: the generated pipeline is not written at all, and **Additional Grafana Alloy configuration becomes the whole configuration** - your own `loki.source.journal`, your own relabelling with whatever label names you prefer, your own outputs. Every other option except `log_level` is ignored, and the generated file says so at its top. The journal is still mounted at `/var/log/journal` (or `/run/log/journal`), and the AppArmor profile is unchanged, so anything the built-in pipeline can read, yours can too.
+`raw_config: true` turns the add-on into a plain Grafana Alloy runner: the generated pipeline is not written at all, and **Additional Grafana Alloy configuration becomes the whole configuration** - your own `loki.source.journal`, your own relabelling with whatever label names you prefer, your own outputs. Every other option except `log_level` is ignored, and the generated file says so at its top. (`loki_url` is still a required field of the form; any URL satisfies it in this mode.) The journal is still mounted at `/var/log/journal` (or `/run/log/journal`), and the AppArmor profile is unchanged, so anything the built-in pipeline can read, yours can too.
 
 This exists so that the built-in options can stay few and conventional (`hostname`, `unit`, `level` are what the ecosystem's dashboards expect) while nobody is locked out of doing it differently. The configuration is still validated before start.
 
@@ -62,7 +73,7 @@ Note: This is injected as-is into the config file. Syntax errors will prevent Gr
 
 ## Troubleshooting
 
-- **No logs in Grafana Loki**: Check that `loki_url` is reachable from HAOS. Try `ping <loki-host>` from the SSH add-on.
+- **No logs in Grafana Loki**: Check that `loki_url` is reachable from HAOS. Try `ping <loki-host>` from the SSH add-on. A `401` or `403` in the add-on log means the credentials are missing or wrong.
 - **Add-on crashes on start**: Check the add-on log for Grafana Alloy config errors. Set `log_level: debug` for verbose output.
 - **"timestamp too old" in Grafana Loki**: Normal on first start. Grafana Alloy reads the full journal history; Grafana Loki rejects entries older than its `reject_old_samples_max_age`. Resolves in 1-2 minutes.
 - **AppArmor**: the Grafana Alloy process runs under a custom profile. Denials show on the HA OS host as `journalctl _TRANSPORT="audit"` lines with `apparmor="DENIED"` (or `"ALLOWED"` while the profile is in complain mode). Report them with the line quoted; they are the input for tightening the profile.

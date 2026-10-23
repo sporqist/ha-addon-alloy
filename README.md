@@ -25,6 +25,8 @@ loki_url: "http://192.168.1.45:3100/loki/api/v1/push"
 log_level: info
 ```
 
+A Loki that needs authentication (Grafana Cloud, a reverse proxy, a multi-tenant setup) takes `loki_username`/`loki_password`, `loki_bearer_token` or `loki_tenant_id`. Every option is described in [DOCS.md](alloy/DOCS.md).
+
 ## What gets shipped
 
 All systemd journal entries from HAOS, including:
@@ -33,7 +35,7 @@ All systemd journal entries from HAOS, including:
 - Supervisor logs
 - Host system logs (kernel, networkd, etc.)
 
-Labels applied: `unit`, `hostname`, `syslog_identifier`, `transport`, `container_name`, `level`.
+Stream labels by default: `job` (`systemd-journal`), `hostname`, `unit` and `level` (the journal priority). `syslog_identifier`, `container_name`, `transport` and `priority` can be added as labels or carried as structured metadata; both are off by default, because every extra label multiplies the streams in your Loki.
 
 ## Debug UI
 
