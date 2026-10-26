@@ -16,6 +16,11 @@ goes directly under the marker below, which Renovate needs to find its
 heading.
 
 <!-- renovate:alloy-release -->
+## 1.21.2
+
+Grafana Alloy 1.21.2; the add-on itself is unchanged.
+Upstream release notes: https://github.com/grafana/alloy/releases/tag/v1.21.2
+
 ## 1.21.1
 
 Grafana Alloy 1.21.1; the add-on itself is unchanged.
