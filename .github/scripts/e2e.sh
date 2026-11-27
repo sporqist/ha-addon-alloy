@@ -18,6 +18,7 @@
 #   7. basic auth, a bearer token and a tenant reach a Loki that checks them
 #   8. a localhost loki_url and contradictory credentials are refused with a
 #      reason; a job with quotes and backslashes ships as that exact label
+#   9. host_label: the line carries a static host label and no hostname
 #   4. the kernel logged ZERO apparmor DENIED (or ALLOWED) events for the
 #      profile - last, so it covers every run above
 #
@@ -466,6 +467,17 @@ QJOB='e2e "quoted" \ job'
 start_addon "$(python3 -c 'import json,sys; print(json.dumps({"loki_url":sys.argv[1],"job":sys.argv[2]}))' "$LOKI_PUSH" "$QJOB")"
 probe "$QJOB" "ci-probe-quoted-$RUN_ID-$RANDOM"
 echo "a job with a quote and a backslash shipped as that label"
+
+say "9. host_label: a static host label in place of hostname"
+start_addon "{\"loki_url\":\"$LOKI_PUSH\",\"job\":\"e2e-host\",\"host_label\":\"e2e-haos\"}"
+probe e2e-host "ci-probe-host-$RUN_ID-$RANDOM"
+if [ -z "$LOCAL" ]; then
+  # hostname is in the default stream_labels; host_label must replace it.
+  assert_labels "host,job,level,unit"
+  printf '%s' "$STREAM" | python3 -c 'import json,sys; l=json.load(sys.stdin)["labels"]; sys.exit(0 if l.get("host")=="e2e-haos" else 1)' \
+    || fail "host label wrong: $STREAM"
+  echo "host label set, hostname gone"
+fi
 
 say "4. Zero AppArmor denials for the profile"
 if [ -n "$LOCAL" ]; then

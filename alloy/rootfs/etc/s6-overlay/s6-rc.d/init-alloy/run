@@ -41,6 +41,8 @@ duration() {
 LOKI_URL=$(opt '.loki_url // ""')
 LOG_LEVEL=$(optd log_level info)
 JOB=$(optd job systemd-journal)
+# host_label: a static `host` stream label in place of `hostname`.
+HOST_LABEL=$(opt '.host_label // ""')
 STREAM_LABELS=$(opt '(.stream_labels // ["hostname","unit","level"]) | join(" ")')
 STRUCTURED_METADATA=$(opt '.structured_metadata // false')
 LEVEL_FROM_MESSAGE=$(opt '.level_from_message // false')
@@ -190,6 +192,7 @@ fi
 # Every option that lands inside an Alloy string, escaped once, here.
 LOKI_URL_S=$(alloy_str "${LOKI_URL}")
 JOB_S=$(alloy_str "${JOB}")
+HOST_LABEL_S=$(alloy_str "${HOST_LABEL}")
 
 echo "-----------------------------------------------------------"
 echo " Grafana Alloy for Home Assistant (${VARIANT})"
@@ -197,6 +200,7 @@ echo " Loki URL: ${LOKI_URL}   auth: ${loki_auth_kind}$([ -n "${LOKI_TENANT_ID}"
 echo " Journal path: ${JOURNAL_PATH}"
 echo " Log level: ${LOG_LEVEL}"
 echo " job: ${JOB}   stream labels: ${STREAM_LABELS}"
+[ -n "${HOST_LABEL}" ] && echo " host label: ${HOST_LABEL} (replaces hostname)"
 echo " structured metadata: ${STRUCTURED_METADATA}   level from message: ${LEVEL_FROM_MESSAGE}"
 echo "-----------------------------------------------------------"
 
@@ -230,7 +234,8 @@ loki.relabel "journal" {
 EOF
 
 relabel() { printf '  rule {\n    source_labels = ["%s"]\n    target_label  = "%s"\n  }\n' "$1" "$2" >> "${CONFIG_FILE}"; }
-has_label hostname          && relabel __journal__hostname        hostname
+# host_label replaces hostname: a stream gets one name for the machine, not two.
+has_label hostname && [ -z "${HOST_LABEL}" ] && relabel __journal__hostname hostname
 has_label unit              && relabel __journal__systemd_unit    unit
 has_label level             && relabel __journal_priority_keyword level
 has_label syslog_identifier && relabel __journal_syslog_identifier syslog_identifier
@@ -248,7 +253,10 @@ echo "}" >> "${CONFIG_FILE}"
 # ── Pipeline ────────────────────────────────────────────────────────────────
 # The job label first, as a stage: the one place every Alloy version honours
 # it (see the loki.source.journal comment above).
-printf '\nloki.process "journal" {\n  stage.static_labels {\n    values = {\n      job = "%s",\n    }\n  }\n' "${JOB_S}" >> "${CONFIG_FILE}"
+# host_label, when set, is stamped in the same stage.
+host_line=""
+[ -n "${HOST_LABEL}" ] && host_line="      host = \"${HOST_LABEL_S}\","$'\n'
+printf '\nloki.process "journal" {\n  stage.static_labels {\n    values = {\n      job = "%s",\n%s    }\n  }\n' "${JOB_S}" "${host_line}" >> "${CONFIG_FILE}"
 
 if [ "${USE_JSON}" = "true" ]; then
 cat >> "${CONFIG_FILE}" <<'EOF'

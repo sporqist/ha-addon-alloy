@@ -58,6 +58,13 @@ configuration:
       WARN or INFO lines arrive as level=error. When on, container lines at
       that priority get their level from the message text (level=... or a
       bare WARN/INFO/... token). Off keeps the journal's own priority.
+  host_label:
+    name: Host label
+    description: >-
+      Gives every line a static host label with this value, e.g. haos or
+      homeassistant-vm, in place of the hostname label - for a Grafana Loki
+      whose other sources already name machines with host. Empty keeps
+      hostname (if chosen in stream labels).
   metrics_enabled:
     name: Scrape metrics
     description: >-

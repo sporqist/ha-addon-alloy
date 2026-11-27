@@ -52,6 +52,7 @@ options:
   loki_password: ""
   loki_bearer_token: ""
   loki_tenant_id: ""
+  host_label: ""
   metrics_url: ""
   metrics_token: ""
   metrics_remote_write_url: ""
@@ -73,6 +74,9 @@ schema:
     - "list(hostname|unit|level|syslog_identifier|container_name|transport|priority)"
   structured_metadata: bool
   level_from_message: bool
+  # A static `host` stream label in place of `hostname`, for a Loki whose other
+  # sources name the machine that way. Empty = hostname as chosen above.
+  host_label: "str?"
   loki_username: "str?"
   loki_password: "password?"
   loki_bearer_token: "password?"
