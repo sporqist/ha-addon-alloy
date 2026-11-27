@@ -19,6 +19,14 @@ profile alloy flags=(attach_disconnected,mediate_deleted) {
   # whole e2e, every option path included, and the gate keeps it honest.
   signal (send) set=(kill,term,int,hup,cont),
 
+  # Docker stops the container through runc. Where runc runs under an AppArmor
+  # profile of its own (AppArmor 4 hosts such as the Ubuntu 24.04 runner), its
+  # SIGTERM/SIGKILL arrive from peer "runc" and are denied without this rule;
+  # Docker's own default profile carries the same rule (moby/moby#47749).
+  # AppArmor 3.1.7, which Home Assistant OS ships, has no runc profile, so
+  # there runc is unconfined and the rule is never used.
+  signal (receive) peer=runc,
+
   # S6-Overlay (v3 layout: s6-rc.d under /etc/s6-overlay). Its stages are
   # scripts, so they are read as well as executed.
   /init rix,

@@ -16,6 +16,14 @@ goes directly under the marker below, which Renovate needs to find its
 heading.
 
 <!-- renovate:alloy-release -->
+## 1.21.3.1
+
+- AppArmor: accept stop signals from `runc`. On hosts where runc has an
+  AppArmor profile of its own (AppArmor 4, such as the Ubuntu 24.04 CI
+  runner) Docker's SIGTERM/SIGKILL were denied, which failed the e2e gate for
+  every pull request since 2026-11-13. AppArmor 3.1.7, which Home Assistant
+  OS ships, has no runc profile, so nothing changes there.
+
 ## 1.21.3
 
 Grafana Alloy 1.21.3; the add-on itself is unchanged.
